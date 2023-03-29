@@ -1,0 +1,83 @@
+use glium::{
+    implement_vertex,
+    index::{PrimitiveType},
+    Display, IndexBuffer, VertexBuffer,
+};
+use tobj::Mesh;
+
+#[derive(Copy, Clone, Debug)]
+pub struct Vertex {
+    position: [f32; 3],
+    normal: [f32; 3],
+    tex_coords: [f32; 2],
+}
+implement_vertex!(Vertex, position, normal, tex_coords);
+
+pub fn gen_buffers(display: &Display, mesh: &Mesh) -> (VertexBuffer<Vertex>, IndexBuffer<u32>) {
+    let mut vertices = vec![];
+
+    let has_normals = !mesh.normals.is_empty();
+    let has_tex_coords = !mesh.texcoords.is_empty();
+
+    if has_normals {
+        assert_eq!(mesh.positions.len() / 3, mesh.normals.len() / 3);
+    }
+
+    if has_tex_coords {
+        assert_eq!(mesh.positions.len() / 3, mesh.texcoords.len() / 2);
+    }
+
+    for position in mesh.positions.chunks_exact(3) {
+        let position = [position[0], position[1], position[2]];
+        vertices.push(Vertex {
+            position,
+            normal: [0.0, 0.0, 0.0],
+            tex_coords: [0.0, 0.0],
+        });
+    }
+
+    if has_normals {
+        let mut i = 0;
+        for normal in mesh.normals.chunks_exact(3) {
+            let normal = [normal[0], normal[1], normal[2]];
+            vertices[i].normal = normal;
+            i += 1;
+        }
+    }
+
+    if has_tex_coords {
+        let mut i = 0;
+        for tex_coord in mesh.texcoords.chunks_exact(2) {
+            let tex_coord = [tex_coord[0], tex_coord[1]];
+            vertices[i].tex_coords = tex_coord;
+            i += 1;
+        }
+    }
+
+    // for vertex in &mesh.indices {
+    //     let i = *vertex as usize;
+    //     let position = &mesh.positions[i * 3..i * 3 + 3];
+    //     let position = [position[0], position[1], position[2]];
+    //     let normal = if has_normals {
+    //         let slice = &mesh.normals[i * 3..i * 3 + 3];
+    //         [slice[0], slice[1], slice[2]]
+    //     } else {
+    //         [0.0, 0.0, 0.0]
+    //     };
+    //     let tex_coord = if has_tex_coords {
+    //         let slice = &mesh.texcoords[i * 2..i * 2 + 2];
+    //         [slice[0], slice[1]]
+    //     } else {
+    //         [0.0, 0.0]
+    //     };
+    //     vertices.push(Vertex {
+    //         position,
+    //         normal,
+    //         tex_coords: tex_coord,
+    //     });
+    // }
+    let vb = VertexBuffer::new(display, &vertices).unwrap();
+    let ib = IndexBuffer::new(display, PrimitiveType::TrianglesList, &mesh.indices).unwrap();
+    // let ib = NoIndices(PrimitiveType::TrianglesList);
+    (vb, ib)
+}
