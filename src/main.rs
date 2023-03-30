@@ -14,7 +14,7 @@ use camera::Camera;
 use cgmath::{point3, prelude::*, vec3, Deg, Matrix4};
 use clap::Parser;
 use glium::{
-    draw_parameters::{DepthTest},
+    draw_parameters::DepthTest,
     glutin::{
         event::{Event, MouseScrollDelta, TouchPhase, WindowEvent},
         event_loop::EventLoop,

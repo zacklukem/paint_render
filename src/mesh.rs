@@ -15,7 +15,7 @@ pub struct Vertex {
 }
 implement_vertex!(Vertex, position, normal, tex_coords);
 
-pub fn debug_points(display: &Display, points: &Vec<Point>) -> (VertexBuffer<Point>, NoIndices) {
+pub fn debug_points(display: &Display, points: &[Point]) -> (VertexBuffer<Point>, NoIndices) {
     (
         VertexBuffer::new(display, points).unwrap(),
         NoIndices(PrimitiveType::Points),
@@ -46,20 +46,16 @@ pub fn gen_buffers(display: &Display, mesh: &Mesh) -> (VertexBuffer<Vertex>, Ind
     }
 
     if has_normals {
-        let mut i = 0;
-        for normal in mesh.normals.chunks_exact(3) {
+        for (i, normal) in mesh.normals.chunks_exact(3).enumerate() {
             let normal = [normal[0], normal[1], normal[2]];
             vertices[i].normal = normal;
-            i += 1;
         }
     }
 
     if has_tex_coords {
-        let mut i = 0;
-        for tex_coord in mesh.texcoords.chunks_exact(2) {
+        for (i, tex_coord) in mesh.texcoords.chunks_exact(2).enumerate() {
             let tex_coord = [tex_coord[0], tex_coord[1]];
             vertices[i].tex_coords = tex_coord;
-            i += 1;
         }
     }
 
