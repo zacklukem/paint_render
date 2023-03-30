@@ -1,9 +1,16 @@
 use cgmath::{prelude::*, Vector3};
+use glium::implement_vertex;
 use log::{info, warn};
 use tobj::Model;
 
+#[derive(Copy, Clone, Debug)]
+pub struct Point {
+    pub position: [f32; 3],
+}
+implement_vertex!(Point, position);
+
 /// Generates points on the surface of a model with a density of `density` points per unit squared
-pub fn gen_point_list(model: &Model, density: f32) -> Vec<Vector3<f32>> {
+pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
     let mesh = &model.mesh;
 
     let mut points = vec![];
@@ -34,17 +41,19 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Vector3<f32>> {
         let mut num_points = num_points_f32.floor() as usize;
         let num_points_remainder = num_points_f32 - num_points as f32;
 
-        if fastrand::f32() < num_points_remainder {
+        if rand::random::<f32>() < num_points_remainder {
             num_points += 1;
         }
         for _ in 0..num_points {
-            let mut r1 = fastrand::f32();
-            let mut r2 = fastrand::f32();
+            let mut r1 = rand::random();
+            let mut r2 = rand::random();
             if r1 + r2 >= 1.0 {
                 r1 = 1.0 - r1;
                 r2 = 1.0 - r2;
             }
-            points.push(a + ab * r1 + ac * r2)
+            points.push(Point {
+                position: (a + ab * r1 + ac * r2).into(),
+            })
         }
     }
 

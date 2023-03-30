@@ -14,7 +14,7 @@ use camera::Camera;
 use cgmath::{point3, prelude::*, vec3, Deg, Matrix4};
 use clap::Parser;
 use glium::{
-    draw_parameters::DepthTest,
+    draw_parameters::{DepthTest},
     glutin::{
         event::{Event, MouseScrollDelta, TouchPhase, WindowEvent},
         event_loop::EventLoop,
@@ -24,6 +24,7 @@ use glium::{
     uniform, BackfaceCullingMode, Depth, Display, DrawParameters, Surface,
 };
 use log::{error, info};
+use mesh::debug_points;
 use point_gen::gen_point_list;
 use tobj::LoadOptions;
 
@@ -36,38 +37,16 @@ struct Args {
     obj_file: PathBuf,
 
     /// Average number of stroke points per unit squared
-    #[arg(short, long, default_value = "100.0")]
+    #[arg(short, long, default_value = "3000.0")]
     stroke_density: f32,
 }
 
-const VERTEX_SHADER_SRC: &str = r#"
-    #version 330
-
-    uniform mat4 view;
-    uniform mat4 perspective;
-    uniform mat4 model;
-
-    in vec3 position;
-    in vec3 normal;
-
-    out vec3 v_normal;
-
-    void main() {
-        gl_Position = perspective * view * model * vec4(position, 1.0);
-        v_normal = normal;
-    }
-"#;
-
-const FRAGMENT_SHADER_SRC: &str = r#"
-    #version 330
-
-    out vec4 color;
-    in vec3 v_normal;
-
-    void main() {
-        color = vec4(1.0, 1.0, 1.0, 1.0) * max(dot(v_normal, vec3(0.0, 0.0, 1.0)), 0.3);
-    }
-"#;
+mod shaders {
+    pub const COLOR_VERT: &str = include_str!("./shaders/color.vert");
+    pub const COLOR_FRAG: &str = include_str!("./shaders/color.frag");
+    pub const POINT_VERT: &str = include_str!("./shaders/point.vert");
+    pub const POINT_FRAG: &str = include_str!("./shaders/point.frag");
+}
 
 fn main() {
     env_logger::init();
@@ -102,8 +81,12 @@ fn main() {
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
     // Shader program
-    let program =
-        glium::Program::from_source(&display, VERTEX_SHADER_SRC, FRAGMENT_SHADER_SRC, None)
+    let color_program =
+        glium::Program::from_source(&display, shaders::COLOR_VERT, shaders::COLOR_FRAG, None)
+            .unwrap();
+
+    let point_program =
+        glium::Program::from_source(&display, shaders::POINT_VERT, shaders::POINT_FRAG, None)
             .unwrap();
 
     // Generate buffers and point lists for each model
@@ -119,7 +102,8 @@ fn main() {
                 start.elapsed()
             );
             let buffers = gen_buffers(&display, &model.mesh);
-            (model, buffers, points)
+            let point_buffer = debug_points(&display, &points);
+            (model, buffers, points, point_buffer)
         })
         .collect::<Vec<_>>();
 
@@ -174,12 +158,12 @@ fn main() {
             }
         };
 
-        for (_, (vb, ib), _) in &models {
+        for (_, (vb, ib), _, (point_vb, point_ib)) in &models {
             target
                 .draw(
                     vb,
                     ib,
-                    &program,
+                    &color_program,
                     &uniforms,
                     &DrawParameters {
                         depth: Depth {
@@ -187,7 +171,25 @@ fn main() {
                             write: true,
                             ..Default::default()
                         },
-                        backface_culling: BackfaceCullingMode::CullingDisabled,
+                        backface_culling: BackfaceCullingMode::CullClockwise,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+
+            target
+                .draw(
+                    point_vb,
+                    point_ib,
+                    &point_program,
+                    &uniforms,
+                    &DrawParameters {
+                        point_size: Some(10.0),
+                        depth: Depth {
+                            test: DepthTest::IfLess,
+                            write: false,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                 )

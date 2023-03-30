@@ -1,9 +1,11 @@
 use glium::{
     implement_vertex,
-    index::{PrimitiveType},
+    index::{NoIndices, PrimitiveType},
     Display, IndexBuffer, VertexBuffer,
 };
 use tobj::Mesh;
+
+use crate::point_gen::Point;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
@@ -12,6 +14,13 @@ pub struct Vertex {
     tex_coords: [f32; 2],
 }
 implement_vertex!(Vertex, position, normal, tex_coords);
+
+pub fn debug_points(display: &Display, points: &Vec<Point>) -> (VertexBuffer<Point>, NoIndices) {
+    (
+        VertexBuffer::new(display, points).unwrap(),
+        NoIndices(PrimitiveType::Points),
+    )
+}
 
 pub fn gen_buffers(display: &Display, mesh: &Mesh) -> (VertexBuffer<Vertex>, IndexBuffer<u32>) {
     let mut vertices = vec![];
@@ -54,30 +63,7 @@ pub fn gen_buffers(display: &Display, mesh: &Mesh) -> (VertexBuffer<Vertex>, Ind
         }
     }
 
-    // for vertex in &mesh.indices {
-    //     let i = *vertex as usize;
-    //     let position = &mesh.positions[i * 3..i * 3 + 3];
-    //     let position = [position[0], position[1], position[2]];
-    //     let normal = if has_normals {
-    //         let slice = &mesh.normals[i * 3..i * 3 + 3];
-    //         [slice[0], slice[1], slice[2]]
-    //     } else {
-    //         [0.0, 0.0, 0.0]
-    //     };
-    //     let tex_coord = if has_tex_coords {
-    //         let slice = &mesh.texcoords[i * 2..i * 2 + 2];
-    //         [slice[0], slice[1]]
-    //     } else {
-    //         [0.0, 0.0]
-    //     };
-    //     vertices.push(Vertex {
-    //         position,
-    //         normal,
-    //         tex_coords: tex_coord,
-    //     });
-    // }
     let vb = VertexBuffer::new(display, &vertices).unwrap();
     let ib = IndexBuffer::new(display, PrimitiveType::TrianglesList, &mesh.indices).unwrap();
-    // let ib = NoIndices(PrimitiveType::TrianglesList);
     (vb, ib)
 }

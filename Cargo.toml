@@ -9,7 +9,7 @@ edition = "2021"
 cgmath = { version = "0.18.0", features = ["swizzle", "rand"] }
 clap = { version = "4.2.0", features = ["derive"] }
 env_logger = "0.10.0"
-fastrand = "1.9.0"
 glium = "0.32.0"
 log = "0.4.17"
+rand = "0.8.5"
 tobj = "3.2.4"
