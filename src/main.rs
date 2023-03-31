@@ -4,15 +4,19 @@ mod objects;
 mod point_gen;
 
 use std::{
+    cmp::Reverse,
     collections::HashSet,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        mpsc::{channel, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::{Duration, Instant},
 };
 
 use camera::Camera;
-use cgmath::{point3, prelude::*, vec3, Deg, Matrix4};
+use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Vector3};
 use clap::Parser;
 use glium::{
     draw_parameters::DepthTest,
@@ -31,7 +35,10 @@ use glium::{
     uniform, BackfaceCullingMode, Blend, Depth, Display, DrawParameters, Program, Surface,
 };
 
+use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
+use point_gen::Point;
+use rayon::{prelude::IntoParallelRefIterator, slice::ParallelSliceMut};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -53,8 +60,15 @@ mod shaders {
     pub const POINT_FRAG: &str = include_str!("./shaders/point.frag");
 }
 
+#[derive(Debug, Copy, Clone)]
+enum ViewState {
+    Raster,
+    Full,
+}
+
 #[derive(Debug)]
 struct State {
+    view_state: Mutex<ViewState>,
     wheel_delta: Mutex<Option<f32>>,
     camera: Mutex<Camera>,
     keys: Mutex<HashSet<VirtualKeyCode>>,
@@ -81,7 +95,7 @@ fn main() {
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
     // Shader programs
-    let data = init_draw_data(&display, &args);
+    let mut data = init_draw_data(&display, &args);
 
     // Camera
 
@@ -89,6 +103,7 @@ fn main() {
         / display.get_framebuffer_dimensions().1 as f32;
 
     let state = Arc::new(State {
+        view_state: Mutex::new(ViewState::Full),
         camera: Mutex::new(Camera::new(
             point3(2.0, 2.0, 2.0),
             vec3(-10.0, -10.0, -10.0),
@@ -102,8 +117,14 @@ fn main() {
         model: Mutex::new(Matrix4::identity()),
     });
 
+    let (tx, rx) = channel();
+
     // Handle fixed time loop
-    fixed_update(state.clone());
+    fixed_update(
+        state.clone(),
+        data.models.iter().map(|p| p.points.clone()).collect(),
+        tx,
+    );
 
     event_loop.run(move |ev, _, control_flow| {
         match ev {
@@ -115,6 +136,13 @@ fn main() {
                 WindowEvent::KeyboardInput { input, .. } => {
                     let key = input.virtual_keycode.unwrap();
                     if input.state == ElementState::Pressed {
+                        if key == VirtualKeyCode::V {
+                            let mut view = state.view_state.lock().unwrap();
+                            *view = match *view {
+                                ViewState::Full => ViewState::Raster,
+                                ViewState::Raster => ViewState::Full,
+                            };
+                        }
                         state.keys.lock().unwrap().insert(key);
                     } else {
                         state.keys.lock().unwrap().remove(&key);
@@ -149,6 +177,19 @@ fn main() {
 
         let next_frame_time = Instant::now() + Duration::from_nanos(16_666_667);
         control_flow.set_wait_until(next_frame_time);
+
+        {
+            let mut last_points = None;
+            while let Ok(points) = rx.try_recv() {
+                last_points = Some(points);
+            }
+            if let Some(points) = last_points {
+                for (i, points) in points.into_iter().enumerate() {
+                    data.models[i].point_buffers = gen_point_buffers(&display, &points);
+                    data.models[i].points = points;
+                }
+            }
+        }
 
         draw(&state, &display, &data);
     });
@@ -208,31 +249,89 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     }
 }
 
-fn fixed_update(state: Arc<State>) {
-    thread::spawn(move || loop {
-        let start = Instant::now();
-        {
-            let wheel_delta = state.wheel_delta.lock().unwrap();
-            let mut camera = state.camera.lock().unwrap();
-            let keys = state.keys.lock().unwrap();
-            if let Some(wheel_delta) = *wheel_delta {
-                camera.zoom(wheel_delta * 0.01);
+fn fixed_update(
+    state: Arc<State>,
+    mut points_m: Vec<Vec<Point>>,
+    points_sender: Sender<Vec<Vec<Point>>>,
+) {
+    thread::spawn(move || {
+        let mut reverse_sort = true;
+        let mut changed = true;
+        loop {
+            let start = Instant::now();
+            {
+                let wheel_delta = state.wheel_delta.lock().unwrap();
+                let keys = state.keys.lock().unwrap();
+                let mut model = state.model.lock().unwrap();
+                let mut camera = state.camera.lock().unwrap();
+                if let Some(wheel_delta) = *wheel_delta {
+                    camera.zoom(wheel_delta * 0.01);
+                    // Disable update on mouse wheel because it's too slow
+                    // changed = true;
+                }
+                if keys.contains(&VirtualKeyCode::Left) {
+                    *model = Matrix4::from_angle_y(Deg(-0.3)) * *model;
+                    changed = true;
+                }
+                if keys.contains(&VirtualKeyCode::Right) {
+                    *model = Matrix4::from_angle_y(Deg(0.3)) * *model;
+                    changed = true;
+                }
+                if keys.contains(&VirtualKeyCode::Up) {
+                    *model = Matrix4::from_angle_x(Deg(-0.3)) * *model;
+                    changed = true;
+                }
+                if keys.contains(&VirtualKeyCode::Down) {
+                    *model = Matrix4::from_angle_x(Deg(0.3)) * *model;
+                    changed = true;
+                }
+                if keys.contains(&VirtualKeyCode::R) {
+                    reverse_sort = !reverse_sort;
+                    changed = true;
+                }
+                if changed {
+                    changed = false;
+                    let model = *model;
+                    let view = Matrix4::from(camera.view());
+                    let perspective = Matrix4::from(camera.perspective());
+
+                    #[derive(PartialOrd, PartialEq)]
+                    #[repr(transparent)]
+                    struct Ord<T>(T);
+
+                    impl std::cmp::Eq for Ord<f32> {}
+
+                    impl std::cmp::Ord for Ord<f32> {
+                        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                            self.partial_cmp(other).unwrap().reverse()
+                        }
+                    }
+
+                    for points in &mut points_m {
+                        if reverse_sort {
+                            points.par_sort_by_cached_key(|p| {
+                                let p = perspective
+                                    * view
+                                    * model
+                                    * vec4(p.position[0], p.position[1], p.position[2], 1.0);
+                                Reverse(Ord(p.z / p.w))
+                            });
+                        } else {
+                            points.par_sort_by_cached_key(|p| {
+                                let p = perspective
+                                    * view
+                                    * model
+                                    * vec4(p.position[0], p.position[1], p.position[2], 1.0);
+                                Ord(p.z / p.w)
+                            });
+                        }
+                    }
+
+                    points_sender.send(points_m.clone()).unwrap();
+                }
             }
-            let mut model = state.model.lock().unwrap();
-            if keys.contains(&VirtualKeyCode::Left) {
-                *model = Matrix4::from_angle_y(Deg(-0.3)) * *model;
-            }
-            if keys.contains(&VirtualKeyCode::Right) {
-                *model = Matrix4::from_angle_y(Deg(0.3)) * *model;
-            }
-            if keys.contains(&VirtualKeyCode::Up) {
-                *model = Matrix4::from_angle_x(Deg(-0.3)) * *model;
-            }
-            if keys.contains(&VirtualKeyCode::Down) {
-                *model = Matrix4::from_angle_x(Deg(0.3)) * *model;
-            }
+            thread::sleep(Duration::from_millis(16).saturating_sub(start.elapsed()));
         }
-        thread::sleep(Duration::from_millis(16).saturating_sub(start.elapsed()));
     });
 }
 
@@ -301,26 +400,38 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
 
 fn draw(state: &State, display: &Display, data: &DrawData) {
     let model: [[f32; 4]; 4] = { <Matrix4<f32> as Into<_>>::into(*state.model.lock().unwrap()) };
+    let view_state = { *state.view_state.lock().unwrap() };
 
-    // render color buffer
-    {
-        let mut target = SimpleFrameBuffer::with_depth_stencil_buffer(
-            display,
-            &data.color_texture,
-            &data.depth_render_buffer,
-        )
-        .unwrap();
+    match view_state {
+        ViewState::Full => {
+            // render color buffer
+            {
+                let mut target = SimpleFrameBuffer::with_depth_stencil_buffer(
+                    display,
+                    &data.color_texture,
+                    &data.depth_render_buffer,
+                )
+                .unwrap();
 
-        draw_model(&mut target, state, data, model);
-    }
+                draw_model(&mut target, state, data, model);
+            }
 
-    // render points
-    {
-        let mut target = display.draw();
-        target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
+            // render points
+            {
+                let mut target = display.draw();
+                target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
-        draw_points(&mut target, state, data, model);
+                draw_points(&mut target, state, data, model);
 
-        target.finish().unwrap();
+                target.finish().unwrap();
+            }
+        }
+        ViewState::Raster => {
+            let mut target = display.draw();
+
+            draw_model(&mut target, state, data, model);
+
+            target.finish().unwrap();
+        }
     }
 }

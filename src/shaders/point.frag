@@ -12,6 +12,6 @@ void main() {
 
     float intensity = 1.0 - brush.x;
 
-    color = g_color * intensity;
-    color.a = 1.0 - brush.x;
+    color = g_color;
+    color.a = intensity;
 }

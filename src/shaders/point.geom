@@ -16,7 +16,7 @@ void main() {
 
     if (point_depth - 0.01 <= model_depth) {
         gl_Position = gl_in[0].gl_Position;
-        gl_PointSize = 10.0;
+        gl_PointSize = 50.0;
         g_color = v_color[0];
         EmitVertex(); 
         EndPrimitive();
