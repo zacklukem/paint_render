@@ -8,7 +8,12 @@ out vec4 color;
 in vec4 g_color;
 
 void main() {
-    vec4 brush = texture(brush_stroke, gl_PointCoord.xy);
+    vec2 coord = gl_PointCoord;
+    coord.x *= 320.0 / 136.0;
+    vec4 brush = texture(brush_stroke, coord);
+    if (coord.x > 1.0) {
+        discard;
+    }
 
     float intensity = 1.0 - brush.x;
 

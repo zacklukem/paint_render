@@ -1,3 +1,5 @@
+#![feature(path_file_prefix)]
+
 mod camera;
 mod mesh;
 mod objects;
@@ -16,7 +18,7 @@ use std::{
 };
 
 use camera::Camera;
-use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Vector3};
+use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4};
 use clap::Parser;
 use glium::{
     draw_parameters::DepthTest,
@@ -38,7 +40,7 @@ use glium::{
 use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
 use point_gen::Point;
-use rayon::{prelude::IntoParallelRefIterator, slice::ParallelSliceMut};
+use rayon::slice::ParallelSliceMut;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -77,6 +79,7 @@ struct State {
 
 struct DrawData {
     models: Vec<ModelData>,
+    albedo_texture: CompressedSrgbTexture2d,
     color_texture: SrgbTexture2d,
     depth_render_buffer: DepthStencilRenderBuffer,
     color_program: Program,
@@ -222,6 +225,19 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     );
     let brush_stroke = CompressedSrgbTexture2d::new(display, brush_stroke).unwrap();
 
+    let albedo_path = format!(
+        "textures/{}.png",
+        args.obj_file.file_prefix().unwrap().to_str().unwrap()
+    );
+
+    let albedo_texture = image::open(albedo_path).unwrap().into_rgba8();
+    let image_dimensions = albedo_texture.dimensions();
+    let albedo_texture = glium::texture::RawImage2d::from_raw_rgba_reversed(
+        &albedo_texture.into_raw(),
+        image_dimensions,
+    );
+    let albedo_texture = CompressedSrgbTexture2d::new(display, albedo_texture).unwrap();
+
     let models = gen_models(&args.obj_file, args.stroke_density, display);
 
     let depth_render_buffer = DepthStencilRenderBuffer::new(
@@ -243,6 +259,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         color_program,
         point_program,
         brush_stroke,
+        albedo_texture,
         models,
         depth_render_buffer,
         color_texture,
@@ -342,6 +359,7 @@ fn draw_model(target: &mut impl Surface, state: &State, data: &DrawData, model: 
             view: camera.view(),
             perspective: camera.perspective(),
             model: model,
+            albedo_texture: &data.albedo_texture,
         }
     };
 
