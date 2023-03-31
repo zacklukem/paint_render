@@ -31,6 +31,8 @@ void main() {
 
     vec4 sample = texture(color_texture, raw_pos.xy);
 
-    v_color = texture(albedo_texture, uv);
+    float kD = max(dot(normal, normalize(vec3(0.0, 1.0, 1.0))), 0.0);
+
+    v_color = texture(albedo_texture, uv) * (kD + 0.2);
     v_model_depth = sample.w;
 }
