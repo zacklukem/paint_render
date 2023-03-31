@@ -15,7 +15,7 @@ pub struct Vertex {
 }
 implement_vertex!(Vertex, position, normal, tex_coords);
 
-pub fn debug_points(display: &Display, points: &[Point]) -> (VertexBuffer<Point>, NoIndices) {
+pub fn gen_point_buffers(display: &Display, points: &[Point]) -> (VertexBuffer<Point>, NoIndices) {
     (
         VertexBuffer::new(display, points).unwrap(),
         NoIndices(PrimitiveType::Points),

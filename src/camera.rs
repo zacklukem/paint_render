@@ -2,6 +2,7 @@ use std::cell::Cell;
 
 use cgmath::{prelude::*, Matrix4, Point3, Rad, Vector3};
 
+#[derive(Debug)]
 pub struct Camera {
     position: Point3<f32>,
     direction: Vector3<f32>,
