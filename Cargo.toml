@@ -10,6 +10,7 @@ cgmath = { version = "0.18.0", features = ["swizzle", "rand"] }
 clap = { version = "4.2.0", features = ["derive"] }
 env_logger = "0.10.0"
 glium = "0.32.0"
+image = "0.24.6"
 log = "0.4.17"
 rand = "0.8.5"
 tobj = "3.2.4"
