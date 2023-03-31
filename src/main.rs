@@ -395,6 +395,7 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
             perspective: camera.perspective(),
             model: model,
             color_texture: &data.color_texture,
+            albedo_texture: &data.albedo_texture,
             brush_stroke: &data.brush_stroke,
         }
     };

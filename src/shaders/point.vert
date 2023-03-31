@@ -4,8 +4,11 @@ uniform mat4 view;
 uniform mat4 perspective;
 uniform mat4 model;
 uniform sampler2D color_texture;
+uniform sampler2D albedo_texture;
 
 in vec3 position;
+in vec3 normal;
+in vec2 uv;
 
 out vec4 v_color;
 out float v_model_depth;
@@ -28,6 +31,6 @@ void main() {
 
     vec4 sample = texture(color_texture, raw_pos.xy);
 
-    v_color = vec4(sample.rgb, 1.0);
+    v_color = texture(albedo_texture, uv);
     v_model_depth = sample.w;
 }

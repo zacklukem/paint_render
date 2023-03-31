@@ -1,4 +1,4 @@
-use cgmath::{prelude::*, Vector3};
+use cgmath::{prelude::*, Vector2, Vector3};
 use glium::implement_vertex;
 use log::{info, warn};
 use tobj::Model;
@@ -6,8 +6,10 @@ use tobj::Model;
 #[derive(Copy, Clone, Debug)]
 pub struct Point {
     pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
 }
-implement_vertex!(Point, position);
+implement_vertex!(Point, position, normal, uv);
 
 /// Generates points on the surface of a model with a density of `density` points per unit squared
 pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
@@ -32,6 +34,20 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
         let b = Vector3::new(b[0], b[1], b[2]);
         let c = Vector3::new(c[0], c[1], c[2]);
 
+        let an = &mesh.normals[(triangle[0] * 3) as usize..(triangle[0] * 3 + 3) as usize];
+        let bn = &mesh.normals[(triangle[1] * 3) as usize..(triangle[1] * 3 + 3) as usize];
+        let cn = &mesh.normals[(triangle[2] * 3) as usize..(triangle[2] * 3 + 3) as usize];
+        let an = Vector3::new(an[0], an[1], an[2]);
+        let bn = Vector3::new(bn[0], bn[1], bn[2]);
+        let cn = Vector3::new(cn[0], cn[1], cn[2]);
+
+        let auv = &mesh.texcoords[(triangle[0] * 2) as usize..(triangle[0] * 2 + 2) as usize];
+        let buv = &mesh.texcoords[(triangle[1] * 2) as usize..(triangle[1] * 2 + 2) as usize];
+        let cuv = &mesh.texcoords[(triangle[2] * 2) as usize..(triangle[2] * 2 + 2) as usize];
+        let auv = Vector2::new(auv[0], auv[1]);
+        let buv = Vector2::new(buv[0], buv[1]);
+        let cuv = Vector2::new(cuv[0], cuv[1]);
+
         let ab = b - a;
         let ac = c - a;
 
@@ -51,8 +67,24 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
                 r1 = 1.0 - r1;
                 r2 = 1.0 - r2;
             }
+
+            let p = a + ab * r1 + ac * r2;
+
+            let ap = p - a;
+            let bp = p - b;
+
+            let u = (ac.cross(ap).magnitude() / 2.0) / area;
+            let v = (ab.cross(bp).magnitude() / 2.0) / area;
+            let w = 1.0 - u - v;
+
+            let n = an * u + bn * v + cn * w;
+
+            let uv = auv * u + buv * v + cuv * w;
+
             points.push(Point {
-                position: (a + ab * r1 + ac * r2).into(),
+                position: p.into(),
+                normal: n.into(),
+                uv: uv.into(),
             })
         }
     }
