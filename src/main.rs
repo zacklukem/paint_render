@@ -35,7 +35,7 @@ use glium::{
 use log::{error, info};
 use mesh::{debug_points, Vertex};
 use point_gen::{gen_point_list, Point};
-use tobj::LoadOptions;
+use tobj::{LoadOptions, Model};
 
 use crate::mesh::gen_buffers;
 
@@ -226,18 +226,22 @@ fn main() {
     });
 }
 
+struct ModelData {
+    #[allow(dead_code)]
+    model: Model,
+    model_buffers: (VertexBuffer<Vertex>, IndexBuffer<u32>),
+    #[allow(dead_code)]
+    points: Vec<Point>,
+    point_buffers: (VertexBuffer<Point>, NoIndices),
+}
+
 fn draw(
     model: &Mutex<Matrix4<f32>>,
     camera: &Mutex<Camera>,
     display: &Display,
     color_texture: &SrgbTexture2d,
     depth_render_buffer: &DepthStencilRenderBuffer,
-    models: &[(
-        tobj::Model,
-        (VertexBuffer<Vertex>, IndexBuffer<u32>),
-        Vec<Point>,
-        (VertexBuffer<Point>, NoIndices),
-    )],
+    models: &[ModelData],
     color_program: &Program,
     point_program: &Program,
     brush_stroke: &CompressedSrgbTexture2d,
@@ -263,7 +267,8 @@ fn draw(
 
         target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
-        for (_, (vb, ib), _, _) in models {
+        for model in models {
+            let (vb, ib) = &model.model_buffers;
             target
                 .draw(
                     vb,
@@ -299,11 +304,12 @@ fn draw(
             }
         };
 
-        for (_, _, _, (point_vb, point_ib)) in models {
+        for model in models {
+            let (vb, ib) = &model.point_buffers;
             target
                 .draw(
-                    point_vb,
-                    point_ib,
+                    vb,
+                    ib,
                     point_program,
                     &camera_uniforms,
                     &DrawParameters {
@@ -318,15 +324,7 @@ fn draw(
     }
 }
 
-fn gen_models(
-    args: Args,
-    display: &Display,
-) -> Vec<(
-    tobj::Model,
-    (VertexBuffer<Vertex>, IndexBuffer<u32>),
-    Vec<Point>,
-    (VertexBuffer<point_gen::Point>, NoIndices),
-)> {
+fn gen_models(args: Args, display: &Display) -> Vec<ModelData> {
     let (models, _materials) = tobj::load_obj(
         &args.obj_file,
         &LoadOptions {
@@ -361,9 +359,14 @@ fn gen_models(
                 model.name,
                 start.elapsed()
             );
-            let buffers = gen_buffers(display, &model.mesh);
-            let point_buffer = debug_points(display, &points);
-            (model, buffers, points, point_buffer)
+            let model_buffers = gen_buffers(display, &model.mesh);
+            let point_buffers = debug_points(display, &points);
+            ModelData {
+                model,
+                model_buffers,
+                points,
+                point_buffers,
+            }
         })
         .collect::<Vec<_>>()
 }
