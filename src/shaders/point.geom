@@ -14,9 +14,9 @@ void main() {
     float point_depth = ((position.z / position.w) + 1.0) / 2.0;
     float model_depth = v_model_depth[0];
 
-    if (abs(point_depth - model_depth) < 0.005) {
+    if (point_depth - 0.01 <= model_depth) {
         gl_Position = gl_in[0].gl_Position;
-        gl_PointSize = 50.0;
+        gl_PointSize = 10.0;
         g_color = v_color[0];
         EmitVertex(); 
         EndPrimitive();
