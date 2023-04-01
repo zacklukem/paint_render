@@ -71,7 +71,7 @@ enum ViewState {
 #[derive(Debug)]
 struct State {
     view_state: Mutex<ViewState>,
-    wheel_delta: Mutex<Option<f32>>,
+    wheel_delta: Mutex<Option<(f32, f32)>>,
     camera: Mutex<Camera>,
     keys: Mutex<HashSet<VirtualKeyCode>>,
     model: Mutex<Matrix4<f32>>,
@@ -163,8 +163,8 @@ fn main() {
                     ..
                 } => {
                     let delta = match delta {
-                        MouseScrollDelta::LineDelta(_, y) => y,
-                        MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
+                        MouseScrollDelta::LineDelta(x, y) => (x, y),
+                        MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
                     };
                     *state.wheel_delta.lock().unwrap() = Some(delta);
                 }
@@ -282,25 +282,16 @@ fn fixed_update(
                 let mut model = state.model.lock().unwrap();
                 let mut camera = state.camera.lock().unwrap();
                 if let Some(wheel_delta) = *wheel_delta {
-                    camera.zoom(wheel_delta * 0.01);
+                    *model = Matrix4::from_angle_y(Deg(0.3 * wheel_delta.0)) * *model;
+                    camera.rotate_up(Deg(-0.3 * wheel_delta.1));
                     // Disable update on mouse wheel because it's too slow
-                    // changed = true;
-                }
-                if keys.contains(&VirtualKeyCode::Left) {
-                    *model = Matrix4::from_angle_y(Deg(-0.3)) * *model;
-                    changed = true;
-                }
-                if keys.contains(&VirtualKeyCode::Right) {
-                    *model = Matrix4::from_angle_y(Deg(0.3)) * *model;
                     changed = true;
                 }
                 if keys.contains(&VirtualKeyCode::Up) {
-                    *model = Matrix4::from_angle_x(Deg(-0.3)) * *model;
-                    changed = true;
+                    camera.zoom(0.01);
                 }
                 if keys.contains(&VirtualKeyCode::Down) {
-                    *model = Matrix4::from_angle_x(Deg(0.3)) * *model;
-                    changed = true;
+                    camera.zoom(-0.01);
                 }
                 if keys.contains(&VirtualKeyCode::R) {
                     reverse_sort = !reverse_sort;

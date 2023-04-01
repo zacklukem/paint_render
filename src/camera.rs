@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use cgmath::{prelude::*, Matrix4, Point3, Rad, Vector3};
+use cgmath::{prelude::*, Deg, Matrix4, Point3, Rad, Vector3};
 
 #[derive(Debug)]
 pub struct Camera {
@@ -33,6 +33,31 @@ impl Camera {
             view: Cell::new(None),
             perspective: Cell::new(None),
         }
+    }
+
+    pub fn rotate_up(&mut self, angle: impl Into<Rad<f32>>) {
+        let angle = angle.into();
+        let theta: Deg<_> = self.position.to_vec().angle(Vector3::unit_y()).into();
+        let angle_d: Deg<_> = angle.into();
+        if (theta.0 + angle_d.0 < 5.0 && angle.0 < 0.0)
+            || (theta.0 + angle_d.0 > 175.0 && angle.0 > 0.0)
+        {
+            return;
+        }
+        let distance = self.position.distance(Point3::origin());
+
+        self.position = Point3::from_vec(
+            distance
+                * (Matrix4::from_axis_angle(self.right(), angle)
+                    * self.position.to_vec().normalize().extend(1.0))
+                .truncate(),
+        );
+        self.direction = -self.position.to_vec().normalize();
+        self.reset_view_perspective();
+    }
+
+    pub fn right(&self) -> Vector3<f32> {
+        self.direction.cross(Vector3::unit_y()).normalize()
     }
 
     pub fn position(&self) -> Point3<f32> {
