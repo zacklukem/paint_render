@@ -6,4 +6,4 @@ Basic painterly renderer
 
 Requirements: Rust, OpenGL
 
-Example Run: `cargo run -- -o models/monkey.obj`
+Example Run: `cargo run -- -o models/apple.obj -s 2200`
