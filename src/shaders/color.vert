@@ -1,5 +1,3 @@
-#version 330
-
 uniform mat4 view;
 uniform mat4 perspective;
 uniform mat4 model;

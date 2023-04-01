@@ -8,11 +8,14 @@ pub struct Point {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub uv: [f32; 2],
+    pub brush_index: i32,
 }
-implement_vertex!(Point, position, normal, uv);
+implement_vertex!(Point, position, normal, uv, brush_index);
 
 /// Generates points on the surface of a model with a density of `density` points per unit squared
 pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
+    let num_brushes = env!("PR_NUM_BRUSHES").parse::<u32>().unwrap();
+
     let mesh = &model.mesh;
 
     let mut points = vec![];
@@ -85,6 +88,7 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
                 position: p.into(),
                 normal: n.into(),
                 uv: uv.into(),
+                brush_index: (rand::random::<u32>() % num_brushes) as i32,
             })
         }
     }

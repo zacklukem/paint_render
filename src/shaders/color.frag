@@ -1,5 +1,3 @@
-#version 330
-
 out vec4 color;
 
 in vec3 v_normal;

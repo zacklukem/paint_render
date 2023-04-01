@@ -1,15 +1,15 @@
-#version 330
-
 uniform sampler2D camera_texture;
 uniform sampler2D brush_stroke;
 
 out vec4 color;
 
 in vec4 g_color;
+in float g_brush_index;
 
 void main() {
     vec2 coord = gl_PointCoord;
-    coord.x *= 320.0 / 136.0;
+    coord.x /= PR_NUM_BRUSHES;
+    coord.x += g_brush_index / PR_NUM_BRUSHES;
     vec4 brush = texture(brush_stroke, coord);
     if (coord.x > 1.0) {
         discard;

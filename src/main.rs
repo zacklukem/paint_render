@@ -8,6 +8,7 @@ mod point_gen;
 use std::{
     cmp::Reverse,
     collections::HashSet,
+    io::Cursor,
     path::PathBuf,
     sync::{
         mpsc::{channel, Sender},
@@ -37,6 +38,7 @@ use glium::{
     uniform, BackfaceCullingMode, Blend, Depth, Display, DrawParameters, Program, Surface,
 };
 
+use image::io::Reader as ImageReader;
 use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
 use point_gen::Point;
@@ -53,13 +55,28 @@ struct Args {
     stroke_density: f32,
 }
 
-mod shaders {
-    pub const COLOR_VERT: &str = include_str!("./shaders/color.vert");
-    pub const COLOR_FRAG: &str = include_str!("./shaders/color.frag");
+const BRUSHES_PNG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/brushes.png"));
 
-    pub const POINT_VERT: &str = include_str!("./shaders/point.vert");
-    pub const POINT_GEOM: &str = include_str!("./shaders/point.geom");
-    pub const POINT_FRAG: &str = include_str!("./shaders/point.frag");
+mod shaders {
+
+    macro_rules! include_shader {
+        ($file: expr) => {
+            concat!(
+                "#version 330\n",
+                "#define PR_NUM_BRUSHES ",
+                env!("PR_NUM_BRUSHES"),
+                "\n",
+                include_str!($file)
+            )
+        };
+    }
+
+    pub const COLOR_VERT: &str = include_shader!("./shaders/color.vert");
+    pub const COLOR_FRAG: &str = include_shader!("./shaders/color.frag");
+
+    pub const POINT_VERT: &str = include_shader!("./shaders/point.vert");
+    pub const POINT_GEOM: &str = include_shader!("./shaders/point.geom");
+    pub const POINT_FRAG: &str = include_shader!("./shaders/point.frag");
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -217,7 +234,12 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     )
     .unwrap();
 
-    let brush_stroke = image::open("textures/0.png").unwrap().into_rgba8();
+    let brush_stroke = ImageReader::new(Cursor::new(BRUSHES_PNG))
+        .with_guessed_format()
+        .unwrap()
+        .decode()
+        .unwrap()
+        .into_rgba8();
     let image_dimensions = brush_stroke.dimensions();
     let brush_stroke = glium::texture::RawImage2d::from_raw_rgba_reversed(
         &brush_stroke.into_raw(),
