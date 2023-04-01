@@ -5,9 +5,11 @@ out vec4 color;
 
 in vec4 g_color;
 in float g_brush_index;
+in vec2 g_uv;
 
 void main() {
-    vec2 coord = gl_PointCoord;
+    vec2 coord = g_uv;
+
     coord.x /= PR_NUM_BRUSHES;
     coord.x += g_brush_index / PR_NUM_BRUSHES;
     vec4 brush = texture(brush_stroke, coord);
