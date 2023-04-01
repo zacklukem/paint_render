@@ -18,7 +18,7 @@ use std::{
 };
 
 use camera::Camera;
-use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4};
+use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Point3};
 use clap::Parser;
 use glium::{
     draw_parameters::DepthTest,
@@ -397,6 +397,7 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
             color_texture: &data.color_texture,
             albedo_texture: &data.albedo_texture,
             brush_stroke: &data.brush_stroke,
+            camera_pos: <Point3<_> as Into<[f32; 3]>>::into(camera.position()),
         }
     };
 

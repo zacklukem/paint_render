@@ -3,6 +3,7 @@
 uniform mat4 view;
 uniform mat4 perspective;
 uniform mat4 model;
+uniform vec3 camera_pos;
 uniform sampler2D color_texture;
 uniform sampler2D albedo_texture;
 
@@ -19,6 +20,8 @@ vec3 hsv2rgb(vec3 c) {
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+const vec3 TO_LIGHT_DIR = normalize(vec3(-1.0, 1.0, 1.0));
+
 void main() {
     gl_Position = perspective * view * model * vec4(position, 1.0);
 
@@ -30,9 +33,21 @@ void main() {
     raw_pos.y = clamp(raw_pos.y, 0.0, 1.0);
 
     vec4 sample = texture(color_texture, raw_pos.xy);
-
-    float kD = max(dot(normal, normalize(vec3(0.0, 1.0, 1.0))), 0.0);
-
-    v_color = texture(albedo_texture, uv) * (kD + 0.2);
     v_model_depth = sample.w;
+
+    // Shading
+
+    vec3 n = normalize((model * vec4(normal, 0.0)).xyz);
+
+    vec3 p = (model * vec4(position, 1.0)).xyz;
+
+    vec3 to_view = normalize(p - camera_pos);
+
+    vec3 r = normalize(reflect(TO_LIGHT_DIR, n));
+
+    float kS = pow(max(dot(r, to_view), 0.0), 20.0);
+
+    float kD = max(dot(n, TO_LIGHT_DIR), 0.0);
+
+    v_color = texture(albedo_texture, uv) * (kD + 0.2) + vec4(1.0, 1.0, 1.0, 1.0) * kS;
 }

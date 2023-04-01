@@ -35,6 +35,10 @@ impl Camera {
         }
     }
 
+    pub fn position(&self) -> Point3<f32> {
+        self.position
+    }
+
     pub fn zoom(&mut self, amount: f32) {
         self.position += self.direction.normalize() * amount;
         self.reset_view_perspective();
