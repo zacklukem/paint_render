@@ -76,7 +76,7 @@ void main() {
     if (quantization != 0) {
         vec3 hsv = rgb2hsv(v_color.xyz);
         float quantize = float(quantization);
-        hsv.z = max(floor(hsv.z * (quantize - 1.0) + 0.5) / (quantize - 1.0), 0.1);
+        hsv.z = max(floor(hsv.z * (quantize - 1.0) + 0.5) / (quantize - 1.0), 1.0 / quantize);
         v_color.xyz = hsv2rgb(hsv);
     }
 }

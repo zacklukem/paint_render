@@ -4,6 +4,7 @@ mod camera;
 mod mesh;
 mod objects;
 mod point_gen;
+mod running_average;
 
 use std::{
     cmp::Reverse,
@@ -47,6 +48,7 @@ use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
 use point_gen::Point;
 use rayon::slice::ParallelSliceMut;
+use running_average::RunningAverage;
 use serde::Deserialize;
 
 #[derive(Parser, Debug)]
@@ -183,6 +185,14 @@ fn main() {
         tx,
     );
 
+    let mut sort_time_average = RunningAverage::<f64, 32>::new();
+    let mut draw_time_average = RunningAverage::<f64, 32>::new();
+    let mut fixed_time_average = RunningAverage::<f64, 32>::new();
+    let mut true_frame_time_average = RunningAverage::<f64, 32>::new();
+
+    let mut true_frame_time_start = Instant::now();
+    let mut true_frame_time = Duration::ZERO;
+
     event_loop.run(move |ev, _, control_flow| {
         match ev {
             Event::WindowEvent { event, .. } => {
@@ -251,25 +261,34 @@ fn main() {
 
         // UI
         if state.enable_gui.load(Ordering::Relaxed) {
+            sort_time_average
+                .add(state.debug_info.sort_time.load(Ordering::Relaxed) as f64 / 1000.0);
+            fixed_time_average
+                .add(state.debug_info.fixed_time.load(Ordering::Relaxed) as f64 / 1000.0);
+            draw_time_average
+                .add(state.debug_info.draw_time.load(Ordering::Relaxed) as f64 / 1000.0);
+
+            true_frame_time_average.add(true_frame_time.as_secs_f64());
+
             egui_glium.run(&display, |egui_ctx| {
                 SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
                     ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
                     ui.add(
                         Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"),
                     );
-                    ui.label(format!(
-                        "Draw time: {} ms",
-                        state.debug_info.draw_time.load(Ordering::Relaxed) as f64 / 1000.0
-                    ));
+
+                    ui.label(format!("Draw time: {:.3} ms", draw_time_average.average()));
 
                     ui.label(format!(
-                        "Fixed time: {} ms",
-                        state.debug_info.fixed_time.load(Ordering::Relaxed) as f64 / 1000.0
+                        "Fixed time: {:.3} ms",
+                        fixed_time_average.average()
                     ));
 
+                    ui.label(format!("Sort time: {:.3} ms", sort_time_average.average()));
+
                     ui.label(format!(
-                        "Sort time: {} ms",
-                        state.debug_info.sort_time.load(Ordering::Relaxed) as f64 / 1000.0
+                        "FPS: {:.3} fps",
+                        1.0 / true_frame_time_average.average()
                     ));
                 });
             });
@@ -294,6 +313,9 @@ fn main() {
             .store(start.elapsed().as_micros() as u64, Ordering::Release);
 
         draw(&state, &display, &data, &mut egui_glium);
+
+        true_frame_time = true_frame_time_start.elapsed();
+        true_frame_time_start = Instant::now();
     });
 }
 
