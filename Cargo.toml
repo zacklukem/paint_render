@@ -16,7 +16,9 @@ image = "0.24.6"
 log = "0.4.17"
 rand = "0.8.5"
 rayon = "1.7.0"
+serde = { version = "1.0.159", features = ["serde_derive"] }
 tobj = "3.2.4"
+toml = "0.7.3"
 
 [build-dependencies]
 image = "0.24.6"

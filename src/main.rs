@@ -8,6 +8,7 @@ mod point_gen;
 use std::{
     cmp::Reverse,
     collections::HashSet,
+    fs,
     io::Cursor,
     path::PathBuf,
     sync::{
@@ -46,16 +47,12 @@ use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
 use point_gen::Point;
 use rayon::slice::ParallelSliceMut;
+use serde::Deserialize;
 
 #[derive(Parser, Debug)]
 struct Args {
     /// The path to the obj file to view
-    #[arg(short, long)]
-    obj_file: PathBuf,
-
-    /// Average number of stroke points per unit squared
-    #[arg(short, long, default_value = "3000.0")]
-    stroke_density: f32,
+    scene: PathBuf,
 }
 
 const BRUSHES_PNG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/brushes.png"));
@@ -80,6 +77,15 @@ mod shaders {
     pub const POINT_VERT: &str = include_shader!("./shaders/point.vert");
     pub const POINT_GEOM: &str = include_shader!("./shaders/point.geom");
     pub const POINT_FRAG: &str = include_shader!("./shaders/point.frag");
+}
+
+#[derive(Debug, Deserialize)]
+struct Scene {
+    obj_file: PathBuf,
+    albedo_texture: PathBuf,
+    stroke_density: f32,
+    brush_size: f32,
+    quantization: i32,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -250,6 +256,9 @@ fn main() {
 }
 
 fn init_draw_data(display: &Display, args: &Args) -> DrawData {
+    let scene: Scene = toml::from_str(&fs::read_to_string(&args.scene).unwrap()).unwrap();
+    let scene_base_dir = args.scene.parent().unwrap();
+
     let color_program =
         Program::from_source(display, shaders::COLOR_VERT, shaders::COLOR_FRAG, None).unwrap();
 
@@ -281,12 +290,9 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     );
     let brush_stroke = CompressedSrgbTexture2d::new(display, brush_stroke).unwrap();
 
-    let albedo_path = format!(
-        "textures/{}.png",
-        args.obj_file.file_prefix().unwrap().to_str().unwrap()
-    );
-
-    let albedo_texture = image::open(albedo_path).unwrap().into_rgba8();
+    let albedo_texture = image::open(scene_base_dir.join(scene.albedo_texture))
+        .unwrap()
+        .into_rgba8();
     let image_dimensions = albedo_texture.dimensions();
     let albedo_texture = glium::texture::RawImage2d::from_raw_rgba_reversed(
         &albedo_texture.into_raw(),
@@ -294,7 +300,11 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     );
     let albedo_texture = CompressedSrgbTexture2d::new(display, albedo_texture).unwrap();
 
-    let models = gen_models(&args.obj_file, args.stroke_density, display);
+    let models = gen_models(
+        scene_base_dir.join(scene.obj_file),
+        scene.stroke_density,
+        display,
+    );
 
     let depth_render_buffer = DepthStencilRenderBuffer::new(
         display,
@@ -312,8 +322,8 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     .unwrap();
 
     let params = Params {
-        quantization: 0,
-        brush_size: 0.04,
+        quantization: scene.quantization,
+        brush_size: scene.brush_size,
     };
 
     DrawData {

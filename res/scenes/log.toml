@@ -1,0 +1,5 @@
+obj_file = "../models/log.obj"
+albedo_texture = "../textures/log.png"
+stroke_density = 2200.0
+brush_size = 0.04
+quantization = 8

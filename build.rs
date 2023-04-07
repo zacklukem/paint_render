@@ -5,7 +5,7 @@ const BRUSH_DIM: u32 = 320;
 
 fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-    let brush_dir = format!("{}/textures/brushes", manifest_dir);
+    let brush_dir = format!("{}/res/textures/brushes", manifest_dir);
     println!("cargo:rerun-if-changed={}", brush_dir);
     let brushes = fs::read_dir(brush_dir)
         .unwrap()

@@ -6,4 +6,4 @@ Basic painterly renderer
 
 Requirements: Rust, OpenGL
 
-Example Run: `cargo run -- -o models/apple.obj -s 2200`
+Example Run: `cargo run -- res/scenes/apple.toml`
