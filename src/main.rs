@@ -20,13 +20,13 @@ use std::{
 };
 
 use camera::Camera;
-use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Point3, Quaternion, Vector4};
+use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Point3, Vector4};
 use clap::Parser;
 use egui::{SidePanel, Slider};
 use egui_glium::EguiGlium;
 use glium::{
     draw_parameters::DepthTest,
-    framebuffer::{DepthStencilRenderBuffer, SimpleFrameBuffer},
+    framebuffer::DepthStencilRenderBuffer,
     glutin::{
         event::{
             ElementState, Event, MouseScrollDelta, StartCause, TouchPhase, VirtualKeyCode,
@@ -228,7 +228,7 @@ fn main() {
         egui_glium.run(&display, |egui_ctx| {
             SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
                 ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
-                ui.add(Slider::new(&mut data.params.brush_size, 0.01..=0.04).text("Brush Size"));
+                ui.add(Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"));
             });
         });
 

@@ -46,12 +46,20 @@ pub fn gen_models(
         );
     }
 
+    // FIXME: ugly hack
+    let mut points = vec![];
+    for model in &models {
+        points.extend(gen_point_list(&model, stroke_density));
+    }
+
     // Generate buffers and point lists for each model
     models
         .into_iter()
-        .map(|model| {
+        .enumerate()
+        .map(|(i, model)| {
             let start = Instant::now();
-            let points = gen_point_list(&model, stroke_density);
+            // FIXME: ugly hack
+            let points = if i == 0 { points.clone() } else { vec![] };
             info!(
                 "Generated {} points for model {} ({:?})",
                 points.len(),
