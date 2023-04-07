@@ -11,6 +11,7 @@ use std::{
     io::Cursor,
     path::PathBuf,
     sync::{
+        atomic::{AtomicBool, Ordering},
         mpsc::{channel, Sender},
         Arc, Mutex,
     },
@@ -19,8 +20,10 @@ use std::{
 };
 
 use camera::Camera;
-use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Point3};
+use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Point3, Quaternion, Vector4};
 use clap::Parser;
+use egui::{SidePanel, Slider};
+use egui_glium::EguiGlium;
 use glium::{
     draw_parameters::DepthTest,
     framebuffer::{DepthStencilRenderBuffer, SimpleFrameBuffer},
@@ -92,6 +95,7 @@ struct State {
     camera: Mutex<Camera>,
     keys: Mutex<HashSet<VirtualKeyCode>>,
     model: Mutex<Matrix4<f32>>,
+    enable_gui: AtomicBool,
 }
 
 struct DrawData {
@@ -102,6 +106,12 @@ struct DrawData {
     color_program: Program,
     point_program: Program,
     brush_stroke: CompressedSrgbTexture2d,
+    params: Params,
+}
+
+struct Params {
+    quantization: i32,
+    brush_size: f32,
 }
 
 fn main() {
@@ -135,7 +145,11 @@ fn main() {
         wheel_delta: Mutex::new(None),
         keys: Mutex::new(HashSet::new()),
         model: Mutex::new(Matrix4::identity()),
+        enable_gui: AtomicBool::new(true),
     });
+
+    let mut egui_glium = EguiGlium::new(&display, &event_loop);
+    // let mut color_test = ;
 
     let (tx, rx) = channel();
 
@@ -148,45 +162,57 @@ fn main() {
 
     event_loop.run(move |ev, _, control_flow| {
         match ev {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => {
-                    control_flow.set_exit();
-                    return;
-                }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    let key = input.virtual_keycode.unwrap();
-                    if input.state == ElementState::Pressed {
-                        if key == VirtualKeyCode::V {
-                            let mut view = state.view_state.lock().unwrap();
-                            *view = match *view {
-                                ViewState::Full => ViewState::Raster,
-                                ViewState::Raster => ViewState::Full,
-                            };
+            Event::WindowEvent { event, .. } => {
+                let response = egui_glium.on_event(&event);
+                if !response.consumed {
+                    match event {
+                        WindowEvent::CloseRequested => {
+                            control_flow.set_exit();
+                            return;
                         }
-                        state.keys.lock().unwrap().insert(key);
-                    } else {
-                        state.keys.lock().unwrap().remove(&key);
-                    }
-                }
-                WindowEvent::MouseWheel {
-                    phase: TouchPhase::Ended,
-                    ..
-                } => {
-                    *state.wheel_delta.lock().unwrap() = None;
-                }
-                WindowEvent::MouseWheel {
-                    delta,
-                    phase: TouchPhase::Moved | TouchPhase::Started,
-                    ..
-                } => {
-                    let delta = match delta {
-                        MouseScrollDelta::LineDelta(x, y) => (x, y),
-                        MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
+                        WindowEvent::KeyboardInput { input, .. } => {
+                            let key = input.virtual_keycode.unwrap();
+                            if input.state == ElementState::Pressed {
+                                match key {
+                                    VirtualKeyCode::V => {
+                                        let mut view = state.view_state.lock().unwrap();
+                                        *view = match *view {
+                                            ViewState::Full => ViewState::Raster,
+                                            ViewState::Raster => ViewState::Full,
+                                        };
+                                    }
+                                    VirtualKeyCode::G => {
+                                        let v = state.enable_gui.load(Ordering::Acquire);
+                                        state.enable_gui.store(!v, Ordering::Release);
+                                    }
+                                    _ => (),
+                                }
+                                state.keys.lock().unwrap().insert(key);
+                            } else {
+                                state.keys.lock().unwrap().remove(&key);
+                            }
+                        }
+                        WindowEvent::MouseWheel {
+                            phase: TouchPhase::Ended,
+                            ..
+                        } => {
+                            *state.wheel_delta.lock().unwrap() = None;
+                        }
+                        WindowEvent::MouseWheel {
+                            delta,
+                            phase: TouchPhase::Moved | TouchPhase::Started,
+                            ..
+                        } => {
+                            let delta = match delta {
+                                MouseScrollDelta::LineDelta(x, y) => (x, y),
+                                MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
+                            };
+                            *state.wheel_delta.lock().unwrap() = Some(delta);
+                        }
+                        _ => return,
                     };
-                    *state.wheel_delta.lock().unwrap() = Some(delta);
                 }
-                _ => return,
-            },
+            }
             Event::NewEvents(cause) => match cause {
                 StartCause::ResumeTimeReached { .. } => (),
                 StartCause::Init => (),
@@ -197,6 +223,14 @@ fn main() {
 
         let next_frame_time = Instant::now() + Duration::from_nanos(16_666_667);
         control_flow.set_wait_until(next_frame_time);
+
+        // UI
+        egui_glium.run(&display, |egui_ctx| {
+            SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
+                ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
+                ui.add(Slider::new(&mut data.params.brush_size, 0.01..=0.04).text("Brush Size"));
+            });
+        });
 
         {
             let mut last_points = None;
@@ -211,7 +245,7 @@ fn main() {
             }
         }
 
-        draw(&state, &display, &data);
+        draw(&state, &display, &data, &mut egui_glium);
     });
 }
 
@@ -277,6 +311,11 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     )
     .unwrap();
 
+    let params = Params {
+        quantization: 0,
+        brush_size: 0.04,
+    };
+
     DrawData {
         color_program,
         point_program,
@@ -285,6 +324,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         models,
         depth_render_buffer,
         color_texture,
+        params,
     }
 }
 
@@ -293,6 +333,58 @@ fn fixed_update(
     mut points_m: Vec<Vec<Point>>,
     points_sender: Sender<Vec<Vec<Point>>>,
 ) {
+    let latest = Arc::new(Mutex::new(
+        None::<(Matrix4<f32>, Matrix4<f32>, Matrix4<f32>, bool)>,
+    ));
+
+    {
+        let latest = latest.clone();
+        thread::spawn(move || loop {
+            let latest = { *latest.lock().unwrap() };
+            let elapsed = if let Some((model, view, perspective, reverse_sort)) = latest {
+                let start = Instant::now();
+                #[derive(PartialOrd, PartialEq)]
+                #[repr(transparent)]
+                struct Ord<T>(T);
+
+                impl std::cmp::Eq for Ord<f32> {}
+
+                impl std::cmp::Ord for Ord<f32> {
+                    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                        self.partial_cmp(other).unwrap().reverse()
+                    }
+                }
+
+                for points in &mut points_m {
+                    if reverse_sort {
+                        points.par_sort_by_cached_key(|p| {
+                            let p: Vector4<f32> = perspective
+                                * view
+                                * model
+                                * vec4(p.position[0], p.position[1], p.position[2], 1.0);
+                            Reverse(Ord(p.z / p.w))
+                        });
+                    } else {
+                        points.par_sort_by_cached_key(|p| {
+                            let p: Vector4<f32> = perspective
+                                * view
+                                * model
+                                * vec4(p.position[0], p.position[1], p.position[2], 1.0);
+                            Ord(p.z / p.w)
+                        });
+                    }
+                }
+
+                points_sender.send(points_m.clone()).unwrap();
+                start.elapsed()
+            } else {
+                Duration::ZERO
+            };
+            // TODO: this is awful
+            thread::sleep(Duration::from_millis(17).saturating_sub(elapsed));
+        });
+    }
+
     thread::spawn(move || {
         let mut reverse_sort = true;
         let mut changed = true;
@@ -324,40 +416,11 @@ fn fixed_update(
                     let model = *model;
                     let view = Matrix4::from(camera.view());
                     let perspective = Matrix4::from(camera.perspective());
-
-                    #[derive(PartialOrd, PartialEq)]
-                    #[repr(transparent)]
-                    struct Ord<T>(T);
-
-                    impl std::cmp::Eq for Ord<f32> {}
-
-                    impl std::cmp::Ord for Ord<f32> {
-                        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                            self.partial_cmp(other).unwrap().reverse()
+                    {
+                        if let Ok(mut lock) = latest.try_lock() {
+                            *lock = Some((model, view, perspective, reverse_sort));
                         }
                     }
-
-                    for points in &mut points_m {
-                        if reverse_sort {
-                            points.par_sort_by_cached_key(|p| {
-                                let p = perspective
-                                    * view
-                                    * model
-                                    * vec4(p.position[0], p.position[1], p.position[2], 1.0);
-                                Reverse(Ord(p.z / p.w))
-                            });
-                        } else {
-                            points.par_sort_by_cached_key(|p| {
-                                let p = perspective
-                                    * view
-                                    * model
-                                    * vec4(p.position[0], p.position[1], p.position[2], 1.0);
-                                Ord(p.z / p.w)
-                            });
-                        }
-                    }
-
-                    points_sender.send(points_m.clone()).unwrap();
                 }
             }
             thread::sleep(Duration::from_millis(16).saturating_sub(start.elapsed()));
@@ -411,6 +474,8 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
             albedo_texture: &data.albedo_texture,
             brush_stroke: &data.brush_stroke,
             camera_pos: <Point3<_> as Into<[f32; 3]>>::into(camera.position()),
+            quantization: data.params.quantization,
+            brush_size: data.params.brush_size,
         }
     };
 
@@ -431,7 +496,7 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
     }
 }
 
-fn draw(state: &State, display: &Display, data: &DrawData) {
+fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut EguiGlium) {
     let model: [[f32; 4]; 4] = { <Matrix4<f32> as Into<_>>::into(*state.model.lock().unwrap()) };
     let view_state = { *state.view_state.lock().unwrap() };
 
@@ -457,6 +522,10 @@ fn draw(state: &State, display: &Display, data: &DrawData) {
 
                 draw_points(&mut target, state, data, model);
 
+                if state.enable_gui.load(Ordering::Relaxed) {
+                    egui_glium.paint(display, &mut target);
+                }
+
                 target.finish().unwrap();
             }
         }
@@ -464,6 +533,10 @@ fn draw(state: &State, display: &Display, data: &DrawData) {
             let mut target = display.draw();
 
             draw_model(&mut target, state, data, model);
+
+            if state.enable_gui.load(Ordering::Relaxed) {
+                egui_glium.paint(display, &mut target);
+            }
 
             target.finish().unwrap();
         }

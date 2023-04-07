@@ -1,6 +1,8 @@
 layout (points) in;
 layout (triangle_strip, max_vertices = 6) out;
 
+uniform float brush_size;
+
 in float v_brush_index[];
 in vec4 v_color[];
 in float v_model_depth[];
@@ -31,7 +33,7 @@ void main() {
     // TODO: fix depth
     // if (point_depth - 0.01 <= model_depth) {
     g_brush_index = v_brush_index[0];
-    float point_size = 0.04;
+    float point_size = brush_size;
 
     g_color = v_color[0];
 

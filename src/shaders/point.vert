@@ -1,9 +1,11 @@
 uniform mat4 view;
 uniform mat4 perspective;
 uniform mat4 model;
-uniform vec3 camera_pos;
 uniform sampler2D color_texture;
 uniform sampler2D albedo_texture;
+uniform sampler2D brush_stroke;
+uniform vec3 camera_pos;
+uniform int quantization;
 
 in vec3 position;
 in vec3 normal;
@@ -71,8 +73,10 @@ void main() {
     v_color = texture(albedo_texture, uv) * (kD + 0.2) + vec4(1.0, 1.0, 1.0, 1.0) * kS;
 
     // Apply quantization to brightness
-    vec3 hsv = rgb2hsv(v_color.xyz);
-    float quantize = 5.0;
-    hsv.z = floor(hsv.z * (quantize - 1.0) + 0.5) / (quantize - 1.0);
-    v_color.xyz = hsv2rgb(hsv);
+    if (quantization != 0) {
+        vec3 hsv = rgb2hsv(v_color.xyz);
+        float quantize = float(quantization);
+        hsv.z = max(floor(hsv.z * (quantize - 1.0) + 0.5) / (quantize - 1.0), 0.1);
+        v_color.xyz = hsv2rgb(hsv);
+    }
 }
