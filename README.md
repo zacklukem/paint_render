@@ -1,9 +1,32 @@
 # Paint Render
 
-Project for Purdue CS 334
+ * Project for Purdue CS 334
+ * Basic painterly renderer
+ * Requirements to Build: Rust, OpenGL
 
-Basic painterly renderer
+## Usage
 
-Requirements: Rust, OpenGL
+### Example Run:
 
-Example Run: `cargo run -- res/scenes/apple.toml`
+`cargo run -- res/scenes/apple.toml`
+
+To build release target with optimizations (recommended if it runs slow):
+
+`cargo run --release -- res/scenes/apple.toml`
+
+### Example scene file (`res/scenes/apple.toml`):
+```toml
+# paths in scene are relative to dir containing scene
+obj_file = "../models/apple.obj"
+albedo_texture = "../textures/apple.png"
+stroke_density = 2200.0
+brush_size = 0.04
+quantization = 8
+```
+
+### While Running
+
+ * Press `g` to toggle UI overlay
+ * Press `v` to toggle points/no paint view
+ * Scroll left/right up/down to pan around scene (trackpad recommended)
+ * Up arrow to zoom in, down arrow to zoom out
