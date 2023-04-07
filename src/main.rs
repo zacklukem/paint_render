@@ -12,7 +12,7 @@ use std::{
     io::Cursor,
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{channel, Sender},
         Arc, Mutex,
     },
@@ -79,6 +79,16 @@ mod shaders {
     pub const POINT_FRAG: &str = include_shader!("./shaders/point.frag");
 }
 
+#[derive(Debug)]
+struct DebugInfo {
+    /// Draw time in microseconds
+    draw_time: AtomicU64,
+    /// Sort time in microseconds
+    sort_time: AtomicU64,
+    /// Fixed time in microseconds
+    fixed_time: AtomicU64,
+}
+
 #[derive(Debug, Deserialize)]
 struct Scene {
     obj_file: PathBuf,
@@ -102,12 +112,14 @@ struct State {
     keys: Mutex<HashSet<VirtualKeyCode>>,
     model: Mutex<Matrix4<f32>>,
     enable_gui: AtomicBool,
+    debug_info: DebugInfo,
 }
 
 struct DrawData {
     models: Vec<ModelData>,
     albedo_texture: CompressedSrgbTexture2d,
     color_texture: SrgbTexture2d,
+    #[allow(dead_code)]
     depth_render_buffer: DepthStencilRenderBuffer,
     color_program: Program,
     point_program: Program,
@@ -152,6 +164,11 @@ fn main() {
         keys: Mutex::new(HashSet::new()),
         model: Mutex::new(Matrix4::identity()),
         enable_gui: AtomicBool::new(true),
+        debug_info: DebugInfo {
+            draw_time: AtomicU64::new(0),
+            sort_time: AtomicU64::new(0),
+            fixed_time: AtomicU64::new(0),
+        },
     });
 
     let mut egui_glium = EguiGlium::new(&display, &event_loop);
@@ -230,13 +247,33 @@ fn main() {
         let next_frame_time = Instant::now() + Duration::from_nanos(16_666_667);
         control_flow.set_wait_until(next_frame_time);
 
+        let start = Instant::now();
+
         // UI
-        egui_glium.run(&display, |egui_ctx| {
-            SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
-                ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
-                ui.add(Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"));
+        if state.enable_gui.load(Ordering::Relaxed) {
+            egui_glium.run(&display, |egui_ctx| {
+                SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
+                    ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
+                    ui.add(
+                        Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"),
+                    );
+                    ui.label(format!(
+                        "Draw time: {} ms",
+                        state.debug_info.draw_time.load(Ordering::Relaxed) as f64 / 1000.0
+                    ));
+
+                    ui.label(format!(
+                        "Fixed time: {} ms",
+                        state.debug_info.fixed_time.load(Ordering::Relaxed) as f64 / 1000.0
+                    ));
+
+                    ui.label(format!(
+                        "Sort time: {} ms",
+                        state.debug_info.sort_time.load(Ordering::Relaxed) as f64 / 1000.0
+                    ));
+                });
             });
-        });
+        }
 
         {
             let mut last_points = None;
@@ -250,6 +287,11 @@ fn main() {
                 }
             }
         }
+
+        state
+            .debug_info
+            .draw_time
+            .store(start.elapsed().as_micros() as u64, Ordering::Release);
 
         draw(&state, &display, &data, &mut egui_glium);
     });
@@ -349,6 +391,7 @@ fn fixed_update(
 
     {
         let latest = latest.clone();
+        let state = state.clone();
         thread::spawn(move || loop {
             let latest = { *latest.lock().unwrap() };
             let elapsed = if let Some((model, view, perspective, reverse_sort)) = latest {
@@ -386,7 +429,12 @@ fn fixed_update(
                 }
 
                 points_sender.send(points_m.clone()).unwrap();
-                start.elapsed()
+                let elapsed = start.elapsed();
+                state
+                    .debug_info
+                    .sort_time
+                    .store(elapsed.as_micros() as u64, Ordering::Relaxed);
+                elapsed
             } else {
                 Duration::ZERO
             };
@@ -433,7 +481,12 @@ fn fixed_update(
                     }
                 }
             }
-            thread::sleep(Duration::from_millis(16).saturating_sub(start.elapsed()));
+            let elapsed = start.elapsed();
+            state
+                .debug_info
+                .fixed_time
+                .store(elapsed.as_micros() as u64, Ordering::Relaxed);
+            thread::sleep(Duration::from_millis(16).saturating_sub(elapsed));
         }
     });
 }
