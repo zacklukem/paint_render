@@ -7,10 +7,12 @@ use tobj::Model;
 pub struct Point {
     pub position: [f32; 3],
     pub normal: [f32; 3],
+    pub tangent: [f32; 3],
+    pub bitangent: [f32; 3],
     pub uv: [f32; 2],
     pub brush_index: i32,
 }
-implement_vertex!(Point, position, normal, uv, brush_index);
+implement_vertex!(Point, position, normal, tangent, bitangent, uv, brush_index);
 
 /// Generates points on the surface of a model with a density of `density` points per unit squared
 pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
@@ -54,6 +56,13 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
         let ab = b - a;
         let ac = c - a;
 
+        let duv_ab = buv - auv;
+        let duv_ac = cuv - auv;
+
+        let r = 1.0 / (duv_ab.x * duv_ac.y - duv_ab.y * duv_ac.x);
+        let tangent = (ab * duv_ac.y - ac * duv_ab.y) * r;
+        let bitangent = (ac * duv_ab.x - ab * duv_ac.x) * r;
+
         let area = ab.cross(ac).magnitude() / 2.0;
         total_area += area;
         let num_points_f32 = area * density;
@@ -81,12 +90,13 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
             let w = 1.0 - u - v;
 
             let n = an * u + bn * v + cn * w;
-
             let uv = auv * u + buv * v + cuv * w;
 
             points.push(Point {
                 position: p.into(),
                 normal: n.into(),
+                tangent: tangent.into(),
+                bitangent: bitangent.into(),
                 uv: uv.into(),
                 brush_index: (rand::random::<u32>() % num_brushes) as i32,
             })

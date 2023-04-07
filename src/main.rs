@@ -437,17 +437,18 @@ fn draw(state: &State, display: &Display, data: &DrawData) {
 
     match view_state {
         ViewState::Full => {
+            // TODO: fix depth buffer
             // render color buffer
-            {
-                let mut target = SimpleFrameBuffer::with_depth_stencil_buffer(
-                    display,
-                    &data.color_texture,
-                    &data.depth_render_buffer,
-                )
-                .unwrap();
+            // {
+            //     let mut target = SimpleFrameBuffer::with_depth_stencil_buffer(
+            //         display,
+            //         &data.color_texture,
+            //         &data.depth_render_buffer,
+            //     )
+            //     .unwrap();
 
-                draw_model(&mut target, state, data, model);
-            }
+            //     draw_model(&mut target, state, data, model);
+            // }
 
             // render points
             {

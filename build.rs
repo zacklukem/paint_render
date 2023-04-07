@@ -10,6 +10,7 @@ fn main() {
     let brushes = fs::read_dir(brush_dir)
         .unwrap()
         .map(|dir| dir.unwrap().path())
+        .filter(|p| p.file_name().unwrap().to_string_lossy() != ".DS_Store")
         .collect::<Vec<_>>();
     let out_image_width = BRUSH_DIM * brushes.len() as u32;
     let out_image_height = BRUSH_DIM;
