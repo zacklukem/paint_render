@@ -30,6 +30,7 @@ use glium::{
     draw_parameters::DepthTest,
     framebuffer::DepthStencilRenderBuffer,
     glutin::{
+        dpi::PhysicalSize,
         event::{
             ElementState, Event, MouseScrollDelta, StartCause, TouchPhase, VirtualKeyCode,
             WindowEvent,
@@ -140,7 +141,7 @@ fn main() {
     let args = Args::parse();
 
     let event_loop = EventLoop::new();
-    let wb = WindowBuilder::new();
+    let wb = WindowBuilder::new().with_inner_size(PhysicalSize::new(2880, 1800));
     let cb = ContextBuilder::new().with_depth_buffer(24);
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
@@ -199,6 +200,12 @@ fn main() {
                 let response = egui_glium.on_event(&event);
                 if !response.consumed {
                     match event {
+                        WindowEvent::Resized(size) => {
+                            let aspect = size.width as f32 / size.height as f32;
+                            let mut camera = state.camera.lock().unwrap();
+                            camera.set_aspect(aspect);
+                            return;
+                        }
                         WindowEvent::CloseRequested => {
                             control_flow.set_exit();
                             return;

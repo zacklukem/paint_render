@@ -69,6 +69,11 @@ impl Camera {
         self.reset_view_perspective();
     }
 
+    pub fn set_aspect(&mut self, aspect_ratio: f32) {
+        self.aspect_ratio = aspect_ratio;
+        self.reset_view_perspective();
+    }
+
     fn reset_view_perspective(&self) {
         self.view.set(None);
         self.perspective.set(None);
