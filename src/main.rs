@@ -28,7 +28,7 @@ use egui::{SidePanel, Slider};
 use egui_glium::EguiGlium;
 use glium::{
     draw_parameters::DepthTest,
-    framebuffer::DepthStencilRenderBuffer,
+    framebuffer::{DepthStencilRenderBuffer, SimpleFrameBuffer},
     glutin::{
         dpi::PhysicalSize,
         event::{
@@ -39,9 +39,12 @@ use glium::{
         window::WindowBuilder,
         ContextBuilder,
     },
+    implement_vertex,
+    index::{NoIndices, PrimitiveType},
     program::ProgramCreationInput,
     texture::{CompressedSrgbTexture2d, DepthStencilFormat, SrgbTexture2d},
-    uniform, BackfaceCullingMode, Blend, Depth, Display, DrawParameters, Program, Surface,
+    uniform, BackfaceCullingMode, Blend, Depth, Display, DrawParameters, IndexBuffer, Program,
+    Surface, VertexBuffer,
 };
 
 use image::io::Reader as ImageReader;
@@ -73,6 +76,9 @@ mod shaders {
             )
         };
     }
+
+    pub const POST_VERT: &str = include_shader!("./shaders/post.vert");
+    pub const POST_FRAG: &str = include_shader!("./shaders/post.frag");
 
     pub const COLOR_VERT: &str = include_shader!("./shaders/color.vert");
     pub const COLOR_FRAG: &str = include_shader!("./shaders/color.frag");
@@ -121,12 +127,15 @@ struct State {
 struct DrawData {
     models: Vec<ModelData>,
     albedo_texture: CompressedSrgbTexture2d,
+    post_process_texture: SrgbTexture2d,
     color_texture: SrgbTexture2d,
     #[allow(dead_code)]
     depth_render_buffer: DepthStencilRenderBuffer,
     color_program: Program,
     point_program: Program,
+    post_process_program: Program,
     brush_stroke: CompressedSrgbTexture2d,
+    post_process_quad: (VertexBuffer<PostProcessVert>, IndexBuffer<u8>),
     params: Params,
 }
 
@@ -134,6 +143,12 @@ struct Params {
     quantization: i32,
     brush_size: f32,
 }
+
+#[derive(Copy, Clone)]
+struct PostProcessVert {
+    position: [f32; 2],
+}
+implement_vertex!(PostProcessVert, position);
 
 fn main() {
     env_logger::init();
@@ -348,6 +363,9 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     )
     .unwrap();
 
+    let post_process_program =
+        Program::from_source(display, shaders::POST_VERT, shaders::POST_FRAG, None).unwrap();
+
     let brush_stroke = ImageReader::new(Cursor::new(BRUSHES_PNG))
         .with_guessed_format()
         .unwrap()
@@ -392,10 +410,47 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     )
     .unwrap();
 
+    let post_process_texture = SrgbTexture2d::empty(
+        display,
+        display.get_framebuffer_dimensions().0,
+        display.get_framebuffer_dimensions().1,
+    )
+    .unwrap();
+
     let params = Params {
         quantization: scene.quantization,
         brush_size: scene.brush_size,
     };
+
+    let post_quad_vert = vec![
+        PostProcessVert {
+            // BL
+            position: [-1.0, -1.0],
+        },
+        PostProcessVert {
+            // BR
+            position: [1.0, -1.0],
+        },
+        PostProcessVert {
+            // TR
+            position: [1.0, 1.0],
+        },
+        PostProcessVert {
+            // TL
+            position: [-1.0, 1.0],
+        },
+    ];
+
+    // TL ---- TR
+    // |  ^     ^
+    // v   \    |
+    // BL >--- BR
+
+    let post_quad_indices = vec![0u8, 1, 3, 1, 2, 3];
+
+    let post_quad_vertex_buffer = VertexBuffer::new(display, &post_quad_vert).unwrap();
+    let post_quad_index_buffer =
+        IndexBuffer::new(display, PrimitiveType::TrianglesList, &post_quad_indices).unwrap();
 
     DrawData {
         color_program,
@@ -405,6 +460,9 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         models,
         depth_render_buffer,
         color_texture,
+        post_process_quad: (post_quad_vertex_buffer, post_quad_index_buffer),
+        post_process_texture,
+        post_process_program,
         params,
     }
 }
@@ -609,10 +667,33 @@ fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut Egui
 
             // render points
             {
-                let mut target = display.draw();
+                // let mut target = display.draw();
+                let mut target =
+                    SimpleFrameBuffer::new(display, &data.post_process_texture).unwrap();
+
                 target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
                 draw_points(&mut target, state, data, model);
+
+                // target.finish().unwrap();
+            }
+
+            {
+                let mut target = display.draw();
+
+                target.clear_color(0.0, 0.0, 0.0, 1.0);
+
+                target
+                    .draw(
+                        &data.post_process_quad.0,
+                        &data.post_process_quad.1,
+                        &data.post_process_program,
+                        &uniform! {
+                            post_process_texture: &data.post_process_texture,
+                        },
+                        &DrawParameters::default(),
+                    )
+                    .unwrap();
 
                 if state.enable_gui.load(Ordering::Relaxed) {
                     egui_glium.paint(display, &mut target);
