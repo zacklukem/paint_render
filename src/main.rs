@@ -40,14 +40,14 @@ use glium::{
         ContextBuilder,
     },
     implement_vertex,
-    index::{NoIndices, PrimitiveType},
+    index::PrimitiveType,
     program::ProgramCreationInput,
     texture::{CompressedSrgbTexture2d, DepthStencilFormat, SrgbTexture2d},
     uniform, BackfaceCullingMode, Blend, Depth, Display, DrawParameters, IndexBuffer, Program,
     Surface, VertexBuffer,
 };
 
-use image::io::Reader as ImageReader;
+use image::{io::Reader as ImageReader, ImageBuffer, Rgba};
 use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
 use point_gen::Point;
@@ -62,6 +62,7 @@ struct Args {
 }
 
 const BRUSHES_PNG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/brushes.png"));
+const CANVAS_PNG: &[u8] = include_bytes!("../res/textures/postprocess/canvas.png");
 
 mod shaders {
 
@@ -127,6 +128,7 @@ struct State {
 struct DrawData {
     models: Vec<ModelData>,
     albedo_texture: CompressedSrgbTexture2d,
+    canvas_texture: CompressedSrgbTexture2d,
     post_process_texture: SrgbTexture2d,
     color_texture: SrgbTexture2d,
     #[allow(dead_code)]
@@ -142,6 +144,7 @@ struct DrawData {
 struct Params {
     quantization: i32,
     brush_size: f32,
+    enable_canvas: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -190,7 +193,6 @@ fn main() {
     });
 
     let mut egui_glium = EguiGlium::new(&display, &event_loop);
-    // let mut color_test = ;
 
     let (tx, rx) = channel();
 
@@ -312,6 +314,8 @@ fn main() {
                         "FPS: {:.3} fps",
                         1.0 / true_frame_time_average.average()
                     ));
+
+                    ui.checkbox(&mut data.params.enable_canvas, "Enable Canvas")
                 });
             });
         }
@@ -339,6 +343,16 @@ fn main() {
         true_frame_time = true_frame_time_start.elapsed();
         true_frame_time_start = Instant::now();
     });
+}
+
+fn image_to_texture(
+    display: &Display,
+    image: ImageBuffer<Rgba<u8>, Vec<u8>>,
+) -> CompressedSrgbTexture2d {
+    let image_dimensions = image.dimensions();
+    let image =
+        glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dimensions);
+    CompressedSrgbTexture2d::new(display, image).unwrap()
 }
 
 fn init_draw_data(display: &Display, args: &Args) -> DrawData {
@@ -372,22 +386,20 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         .decode()
         .unwrap()
         .into_rgba8();
-    let image_dimensions = brush_stroke.dimensions();
-    let brush_stroke = glium::texture::RawImage2d::from_raw_rgba_reversed(
-        &brush_stroke.into_raw(),
-        image_dimensions,
-    );
-    let brush_stroke = CompressedSrgbTexture2d::new(display, brush_stroke).unwrap();
+    let brush_stroke = image_to_texture(display, brush_stroke);
 
     let albedo_texture = image::open(scene_base_dir.join(scene.albedo_texture))
         .unwrap()
         .into_rgba8();
-    let image_dimensions = albedo_texture.dimensions();
-    let albedo_texture = glium::texture::RawImage2d::from_raw_rgba_reversed(
-        &albedo_texture.into_raw(),
-        image_dimensions,
-    );
-    let albedo_texture = CompressedSrgbTexture2d::new(display, albedo_texture).unwrap();
+    let albedo_texture = image_to_texture(display, albedo_texture);
+
+    let canvas_texture = ImageReader::new(Cursor::new(CANVAS_PNG))
+        .with_guessed_format()
+        .unwrap()
+        .decode()
+        .unwrap()
+        .into_rgba8();
+    let canvas_texture = image_to_texture(display, canvas_texture);
 
     let models = gen_models(
         scene_base_dir.join(scene.obj_file),
@@ -420,6 +432,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     let params = Params {
         quantization: scene.quantization,
         brush_size: scene.brush_size,
+        enable_canvas: true,
     };
 
     let post_quad_vert = vec![
@@ -457,6 +470,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         point_program,
         brush_stroke,
         albedo_texture,
+        canvas_texture,
         models,
         depth_render_buffer,
         color_texture,
@@ -661,21 +675,17 @@ fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut Egui
             //         &data.depth_render_buffer,
             //     )
             //     .unwrap();
-
             //     draw_model(&mut target, state, data, model);
             // }
 
             // render points
             {
-                // let mut target = display.draw();
                 let mut target =
                     SimpleFrameBuffer::new(display, &data.post_process_texture).unwrap();
 
                 target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
                 draw_points(&mut target, state, data, model);
-
-                // target.finish().unwrap();
             }
 
             {
@@ -690,6 +700,8 @@ fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut Egui
                         &data.post_process_program,
                         &uniform! {
                             post_process_texture: &data.post_process_texture,
+                            canvas_texture: &data.canvas_texture,
+                            enable_canvas: data.params.enable_canvas,
                         },
                         &DrawParameters::default(),
                     )
