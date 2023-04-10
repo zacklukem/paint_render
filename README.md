@@ -22,6 +22,7 @@ albedo_texture = "../textures/apple.png"
 stroke_density = 2200.0
 brush_size = 0.04
 quantization = 8
+background = [0.5, 0.5, 0.5]
 ```
 
 ### While Running
