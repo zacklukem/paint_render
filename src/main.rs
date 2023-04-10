@@ -148,6 +148,7 @@ struct Params {
     brush_size: f32,
     saturation: f32,
     enable_canvas: bool,
+    enable_brush_tbn: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -353,6 +354,7 @@ fn main() {
                             .clamp_to_range(false),
                     );
                     ui.checkbox(&mut data.params.enable_canvas, "Enable Canvas");
+                    ui.checkbox(&mut data.params.enable_brush_tbn, "Enable Brush TBN");
 
                     ui.heading("Speed");
 
@@ -469,6 +471,7 @@ fn init_draw_data(display: &Display, scene: &Scene, scene_base_dir: &Path) -> Dr
         brush_size: scene.brush_size,
         enable_canvas: true,
         saturation: scene.saturation.unwrap_or(1.0),
+        enable_brush_tbn: true,
     };
 
     let post_quad_vert = vec![
@@ -690,6 +693,7 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
             camera_pos: <Point3<_> as Into<[f32; 3]>>::into(camera.position()),
             quantization: data.params.quantization,
             brush_size: data.params.brush_size,
+            enable_brush_tbn: data.params.enable_brush_tbn,
         }
     };
 
