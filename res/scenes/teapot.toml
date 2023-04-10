@@ -1,6 +1,6 @@
 obj_file = "../models/teapot.obj"
 albedo_texture = "../textures/teapot.png"
-stroke_density = 2200.0
+stroke_density = 2200
 brush_size = 0.04
 quantization = 3
 background = [0.24809237, 0.20834038, 0.24809238]

@@ -1,5 +1,3 @@
-#![feature(path_file_prefix)]
-
 mod camera;
 mod mesh;
 mod objects;
@@ -11,10 +9,10 @@ use std::{
     collections::HashSet,
     fs,
     io::Cursor,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc::{channel, Sender},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
     },
     thread,
@@ -50,10 +48,11 @@ use glium::{
 use image::{io::Reader as ImageReader, ImageBuffer, Rgba};
 use mesh::gen_point_buffers;
 use objects::{gen_models, ModelData};
-use point_gen::Point;
+use point_gen::{gen_point_list, Point};
 use rayon::slice::ParallelSliceMut;
 use running_average::RunningAverage;
 use serde::Deserialize;
+use tobj::Model;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -103,7 +102,7 @@ struct DebugInfo {
 struct Scene {
     obj_file: PathBuf,
     albedo_texture: PathBuf,
-    stroke_density: f32,
+    stroke_density: u32,
     brush_size: f32,
     quantization: i32,
     background: (f32, f32, f32),
@@ -125,6 +124,7 @@ struct State {
     model: Mutex<Matrix4<f32>>,
     enable_gui: AtomicBool,
     debug_info: DebugInfo,
+    stroke_density: AtomicU32,
 }
 
 struct DrawData {
@@ -159,13 +159,16 @@ fn main() {
 
     let args = Args::parse();
 
+    let scene: Scene = toml::from_str(&fs::read_to_string(&args.scene).unwrap()).unwrap();
+    let scene_base_dir = args.scene.parent().unwrap();
+
     let event_loop = EventLoop::new();
     let wb = WindowBuilder::new().with_inner_size(PhysicalSize::new(2880, 1800));
     let cb = ContextBuilder::new().with_depth_buffer(24);
     let display = Display::new(wb, cb, &event_loop).unwrap();
 
     // Shader programs
-    let mut data = init_draw_data(&display, &args);
+    let mut data = init_draw_data(&display, &scene, scene_base_dir);
 
     // Camera
 
@@ -191,17 +194,21 @@ fn main() {
             sort_time: AtomicU64::new(0),
             fixed_time: AtomicU64::new(0),
         },
+        stroke_density: AtomicU32::new(scene.stroke_density),
     });
 
     let mut egui_glium = EguiGlium::new(&display, &event_loop);
 
     let (tx, rx) = channel();
+    let (point_update_tx, point_update_rx) = channel();
 
     // Handle fixed time loop
     fixed_update(
         state.clone(),
         data.models.iter().map(|p| p.points.clone()).collect(),
+        data.models.iter().map(|m| m.model.clone()).collect(),
         tx,
+        point_update_rx,
     );
 
     let mut sort_time_average = RunningAverage::<f64, 32>::new();
@@ -211,6 +218,8 @@ fn main() {
 
     let mut true_frame_time_start = Instant::now();
     let mut true_frame_time = Duration::ZERO;
+
+    let mut point_density = state.stroke_density.load(Ordering::Relaxed);
 
     event_loop.run(move |ev, _, control_flow| {
         match ev {
@@ -304,9 +313,27 @@ fn main() {
             egui_glium.run(&display, |egui_ctx| {
                 SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
                     ui.heading("Painting");
-                    ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
+                    ui.horizontal(|ui| {
+                        let pd = ui.add(
+                            Slider::new(&mut point_density, 1..=10000)
+                                .text("Point Density")
+                                .clamp_to_range(false),
+                        );
+                        if pd.changed() {
+                            state.stroke_density.store(point_density, Ordering::Relaxed);
+                            point_update_tx.send(()).unwrap();
+                        }
+                    });
+
                     ui.add(
-                        Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"),
+                        Slider::new(&mut data.params.quantization, 0..=20)
+                            .text("Quantization")
+                            .clamp_to_range(false),
+                    );
+                    ui.add(
+                        Slider::new(&mut data.params.brush_size, 0.01..=0.08)
+                            .text("Brush Size")
+                            .clamp_to_range(false),
                     );
                     ui.horizontal(|ui| {
                         ui.color_edit_button_rgb(&mut data.background);
@@ -314,7 +341,11 @@ fn main() {
                     });
 
                     ui.heading("Post Processing");
-                    ui.add(Slider::new(&mut data.params.saturation, 0.0..=2.0).text("Saturation"));
+                    ui.add(
+                        Slider::new(&mut data.params.saturation, 0.0..=2.0)
+                            .text("Saturation")
+                            .clamp_to_range(false),
+                    );
                     ui.checkbox(&mut data.params.enable_canvas, "Enable Canvas");
 
                     ui.heading("Speed");
@@ -371,10 +402,7 @@ fn image_to_texture(
     CompressedSrgbTexture2d::new(display, image).unwrap()
 }
 
-fn init_draw_data(display: &Display, args: &Args) -> DrawData {
-    let scene: Scene = toml::from_str(&fs::read_to_string(&args.scene).unwrap()).unwrap();
-    let scene_base_dir = args.scene.parent().unwrap();
-
+fn init_draw_data(display: &Display, scene: &Scene, scene_base_dir: &Path) -> DrawData {
     let color_program =
         Program::from_source(display, shaders::COLOR_VERT, shaders::COLOR_FRAG, None).unwrap();
 
@@ -404,7 +432,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         .into_rgba8();
     let brush_stroke = image_to_texture(display, brush_stroke);
 
-    let albedo_texture = image::open(scene_base_dir.join(scene.albedo_texture))
+    let albedo_texture = image::open(scene_base_dir.join(&scene.albedo_texture))
         .unwrap()
         .into_rgba8();
     let albedo_texture = image_to_texture(display, albedo_texture);
@@ -418,8 +446,8 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
     let canvas_texture = image_to_texture(display, canvas_texture);
 
     let models = gen_models(
-        scene_base_dir.join(scene.obj_file),
-        scene.stroke_density,
+        scene_base_dir.join(&scene.obj_file),
+        scene.stroke_density as f32,
         display,
     );
 
@@ -485,7 +513,9 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
 fn fixed_update(
     state: Arc<State>,
     mut points_m: Vec<Vec<Point>>,
+    models: Vec<Model>,
     points_sender: Sender<Vec<Vec<Point>>>,
+    point_update_rx: Receiver<()>,
 ) {
     let latest = Arc::new(Mutex::new(
         None::<(Matrix4<f32>, Matrix4<f32>, Matrix4<f32>, bool)>,
@@ -495,6 +525,20 @@ fn fixed_update(
         let latest = latest.clone();
         let state = state.clone();
         thread::spawn(move || loop {
+            let mut regen_points = false;
+            while let Ok(()) = point_update_rx.try_recv() {
+                regen_points = true;
+            }
+
+            if regen_points {
+                let stroke_density = state.stroke_density.load(Ordering::Relaxed);
+                let mut points = vec![];
+                for model in &models {
+                    points.extend(gen_point_list(&model, stroke_density as f32));
+                }
+                points_m = vec![points];
+            }
+
             let latest = { *latest.lock().unwrap() };
             let elapsed = if let Some((model, view, perspective, reverse_sort)) = latest {
                 let start = Instant::now();
