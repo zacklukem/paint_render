@@ -28,7 +28,7 @@ use egui::{SidePanel, Slider};
 use egui_glium::EguiGlium;
 use glium::{
     draw_parameters::DepthTest,
-    framebuffer::{DepthStencilRenderBuffer, SimpleFrameBuffer},
+    framebuffer::SimpleFrameBuffer,
     glutin::{
         dpi::PhysicalSize,
         event::{
@@ -42,7 +42,7 @@ use glium::{
     implement_vertex,
     index::PrimitiveType,
     program::ProgramCreationInput,
-    texture::{CompressedSrgbTexture2d, DepthStencilFormat, SrgbTexture2d},
+    texture::{CompressedSrgbTexture2d, SrgbTexture2d},
     uniform, BackfaceCullingMode, Blend, Depth, Display, DrawParameters, IndexBuffer, Program,
     Surface, VertexBuffer,
 };
@@ -133,9 +133,6 @@ struct DrawData {
     albedo_texture: CompressedSrgbTexture2d,
     canvas_texture: CompressedSrgbTexture2d,
     post_process_texture: SrgbTexture2d,
-    color_texture: SrgbTexture2d,
-    #[allow(dead_code)]
-    depth_render_buffer: DepthStencilRenderBuffer,
     color_program: Program,
     point_program: Program,
     post_process_program: Program,
@@ -426,21 +423,6 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         display,
     );
 
-    let depth_render_buffer = DepthStencilRenderBuffer::new(
-        display,
-        DepthStencilFormat::I24I8,
-        display.get_framebuffer_dimensions().0,
-        display.get_framebuffer_dimensions().1,
-    )
-    .unwrap();
-
-    let color_texture = SrgbTexture2d::empty(
-        display,
-        display.get_framebuffer_dimensions().0,
-        display.get_framebuffer_dimensions().1,
-    )
-    .unwrap();
-
     let post_process_texture = SrgbTexture2d::empty(
         display,
         display.get_framebuffer_dimensions().0,
@@ -492,8 +474,6 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         albedo_texture,
         canvas_texture,
         models,
-        depth_render_buffer,
-        color_texture,
         post_process_quad: (post_quad_vertex_buffer, post_quad_index_buffer),
         post_process_texture,
         post_process_program,
@@ -560,7 +540,7 @@ fn fixed_update(
             } else {
                 Duration::ZERO
             };
-            // TODO: this is awful
+            // FIXME: this is awful
             thread::sleep(Duration::from_millis(17).saturating_sub(elapsed));
         });
     }
@@ -655,7 +635,6 @@ fn draw_points(target: &mut impl Surface, state: &State, data: &DrawData, model:
             view: camera.view(),
             perspective: camera.perspective(),
             model: model,
-            color_texture: &data.color_texture,
             albedo_texture: &data.albedo_texture,
             brush_stroke: &data.brush_stroke,
             camera_pos: <Point3<_> as Into<[f32; 3]>>::into(camera.position()),
@@ -687,18 +666,6 @@ fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut Egui
 
     match view_state {
         ViewState::Full => {
-            // TODO: fix depth buffer
-            // render color buffer
-            // {
-            //     let mut target = SimpleFrameBuffer::with_depth_stencil_buffer(
-            //         display,
-            //         &data.color_texture,
-            //         &data.depth_render_buffer,
-            //     )
-            //     .unwrap();
-            //     draw_model(&mut target, state, data, model);
-            // }
-
             // render points
             {
                 let mut target =

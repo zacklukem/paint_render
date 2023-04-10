@@ -31,8 +31,6 @@ void main() {
     );
     // clang-format on
 
-    // TODO: fix depth
-    // if (point_depth - 0.01 <= model_depth) {
     g_brush_index = v_brush_index[0];
     float point_size = brush_size;
 
@@ -68,5 +66,4 @@ void main() {
     gl_Position = p + position;
     EmitVertex();
     EndPrimitive();
-    // }
 }
