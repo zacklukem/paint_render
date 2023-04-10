@@ -4,3 +4,4 @@ stroke_density = 2200.0
 brush_size = 0.04
 quantization = 8
 background = [0.5, 0.5, 0.5]
+saturation = 0.73

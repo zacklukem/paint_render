@@ -107,6 +107,7 @@ struct Scene {
     brush_size: f32,
     quantization: i32,
     background: (f32, f32, f32),
+    saturation: Option<f32>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -146,6 +147,7 @@ struct DrawData {
 struct Params {
     quantization: i32,
     brush_size: f32,
+    saturation: f32,
     enable_canvas: bool,
 }
 
@@ -304,17 +306,21 @@ fn main() {
 
             egui_glium.run(&display, |egui_ctx| {
                 SidePanel::left("my_side_panel").show(egui_ctx, |ui| {
+                    ui.heading("Painting");
                     ui.add(Slider::new(&mut data.params.quantization, 0..=20).text("Quantization"));
                     ui.add(
                         Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"),
                     );
-
                     ui.horizontal(|ui| {
                         ui.color_edit_button_rgb(&mut data.background);
                         ui.label("Background Color");
                     });
 
+                    ui.heading("Post Processing");
+                    ui.add(Slider::new(&mut data.params.saturation, 0.0..=2.0).text("Saturation"));
                     ui.checkbox(&mut data.params.enable_canvas, "Enable Canvas");
+
+                    ui.heading("Speed");
 
                     ui.label(format!("Draw time: {:.3} ms", draw_time_average.average()));
 
@@ -446,6 +452,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         quantization: scene.quantization,
         brush_size: scene.brush_size,
         enable_canvas: true,
+        saturation: scene.saturation.unwrap_or(1.0),
     };
 
     let post_quad_vert = vec![
@@ -724,6 +731,7 @@ fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut Egui
                             post_process_texture: &data.post_process_texture,
                             canvas_texture: &data.canvas_texture,
                             enable_canvas: data.params.enable_canvas,
+                            saturation: data.params.saturation,
                         },
                         &DrawParameters::default(),
                     )
