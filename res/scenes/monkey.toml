@@ -3,3 +3,4 @@ albedo_texture = "../textures/monkey.png"
 stroke_density = 2200.0
 brush_size = 0.03
 quantization = 0
+background = [0.5, 0.5, 0.5]

@@ -106,6 +106,7 @@ struct Scene {
     stroke_density: f32,
     brush_size: f32,
     quantization: i32,
+    background: (f32, f32, f32),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -127,6 +128,7 @@ struct State {
 
 struct DrawData {
     models: Vec<ModelData>,
+    background: [f32; 3],
     albedo_texture: CompressedSrgbTexture2d,
     canvas_texture: CompressedSrgbTexture2d,
     post_process_texture: SrgbTexture2d,
@@ -248,12 +250,14 @@ fn main() {
                             } else {
                                 state.keys.lock().unwrap().remove(&key);
                             }
+                            return;
                         }
                         WindowEvent::MouseWheel {
                             phase: TouchPhase::Ended,
                             ..
                         } => {
                             *state.wheel_delta.lock().unwrap() = None;
+                            return;
                         }
                         WindowEvent::MouseWheel {
                             delta,
@@ -265,9 +269,13 @@ fn main() {
                                 MouseScrollDelta::PixelDelta(pos) => (pos.x as f32, pos.y as f32),
                             };
                             *state.wheel_delta.lock().unwrap() = Some(delta);
+                            return;
                         }
                         _ => return,
                     };
+                }
+                if !response.repaint {
+                    return;
                 }
             }
             Event::NewEvents(cause) => match cause {
@@ -301,6 +309,13 @@ fn main() {
                         Slider::new(&mut data.params.brush_size, 0.01..=0.08).text("Brush Size"),
                     );
 
+                    ui.horizontal(|ui| {
+                        ui.color_edit_button_rgb(&mut data.background);
+                        ui.label("Background Color");
+                    });
+
+                    ui.checkbox(&mut data.params.enable_canvas, "Enable Canvas");
+
                     ui.label(format!("Draw time: {:.3} ms", draw_time_average.average()));
 
                     ui.label(format!(
@@ -314,8 +329,6 @@ fn main() {
                         "FPS: {:.3} fps",
                         1.0 / true_frame_time_average.average()
                     ));
-
-                    ui.checkbox(&mut data.params.enable_canvas, "Enable Canvas")
                 });
             });
         }
@@ -478,6 +491,7 @@ fn init_draw_data(display: &Display, args: &Args) -> DrawData {
         post_process_texture,
         post_process_program,
         params,
+        background: [scene.background.0, scene.background.1, scene.background.2],
     }
 }
 
@@ -683,7 +697,15 @@ fn draw(state: &State, display: &Display, data: &DrawData, egui_glium: &mut Egui
                 let mut target =
                     SimpleFrameBuffer::new(display, &data.post_process_texture).unwrap();
 
-                target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
+                target.clear_color_and_depth(
+                    (
+                        data.background[0],
+                        data.background[1],
+                        data.background[2],
+                        1.0,
+                    ),
+                    1.0,
+                );
 
                 draw_points(&mut target, state, data, model);
             }
