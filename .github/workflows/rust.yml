@@ -25,7 +25,7 @@ jobs:
       - name: Validate GLSL
         run: |
           for file in $(find src/shaders -type f); do
-            cat <(echo "#version 330\n#define PR_NUM_BRUSHES 2") $file | glslangValidator --stdin -S ${file##*.}
+            cat <(echo -e '#version 330\n#define PR_NUM_BRUSHES 2') $file | glslangValidator --stdin -S ${file##*.}
           done
       - name: Build
         run: cargo build --verbose
