@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cgmath = { version = "0.18.0", features = ["swizzle", "rand"] }
+cgmath = { version = "0.18.0", features = ["swizzle", "rand", "serde"] }
 clap = { version = "4.2.0", features = ["derive"] }
 egui = "0.20.1"
 egui_glium = "0.20.1"

@@ -4,3 +4,5 @@ stroke_density = 2200
 brush_size = 0.04
 quantization = 3
 background = [0.24809237, 0.20834038, 0.24809238]
+position = [0.0, -1.0, 0.0]
+camera_position = [3.0, 3.0, 3.0]

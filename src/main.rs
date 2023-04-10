@@ -20,7 +20,7 @@ use std::{
 };
 
 use camera::Camera;
-use cgmath::{point3, prelude::*, vec3, vec4, Deg, Matrix4, Point3, Vector4};
+use cgmath::{point3, prelude::*, vec4, Deg, Matrix4, Point3, Vector3, Vector4};
 use clap::Parser;
 use egui::{SidePanel, Slider};
 use egui_glium::EguiGlium;
@@ -107,6 +107,8 @@ struct Scene {
     quantization: i32,
     background: (f32, f32, f32),
     saturation: Option<f32>,
+    position: Option<Vector3<f32>>,
+    camera_position: Option<Point3<f32>>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -175,11 +177,13 @@ fn main() {
     let aspect = display.get_framebuffer_dimensions().0 as f32
         / display.get_framebuffer_dimensions().1 as f32;
 
+    let camera_pos = scene.camera_position.unwrap_or(point3(2.0, 2.0, 2.0));
+
     let state = Arc::new(State {
         view_state: Mutex::new(ViewState::Full),
         camera: Mutex::new(Camera::new(
-            point3(2.0, 2.0, 2.0),
-            vec3(-10.0, -10.0, -10.0),
+            camera_pos,
+            Point3::origin() - camera_pos,
             Deg(100.0),
             aspect,
             0.1,
@@ -187,7 +191,9 @@ fn main() {
         )),
         wheel_delta: Mutex::new(None),
         keys: Mutex::new(HashSet::new()),
-        model: Mutex::new(Matrix4::identity()),
+        model: Mutex::new(Matrix4::from_translation(
+            scene.position.unwrap_or(Vector3::zero()),
+        )),
         enable_gui: AtomicBool::new(true),
         debug_info: DebugInfo {
             draw_time: AtomicU64::new(0),
