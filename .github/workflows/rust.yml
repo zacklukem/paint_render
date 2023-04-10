@@ -2,26 +2,32 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Install latest nightly
-      uses: actions-rs/toolchain@v1
-      with:
+      - uses: actions/checkout@v3
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
           toolchain: nightly
           override: true
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Install GLSL Tools
+        run: sudo apt install -y glslang-tools
+      - name: Validate GLSL
+        run: |
+          for file in $(find src/shaders -type f); do
+            cat <(echo "#version 330\n#define PR_NUM_BRUSHES 2") $file | glslangValidator --stdin -S ${file##*.}
+          done
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose

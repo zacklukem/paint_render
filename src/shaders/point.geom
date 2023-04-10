@@ -1,5 +1,5 @@
-layout (points) in;
-layout (triangle_strip, max_vertices = 6) out;
+layout(points) in;
+layout(triangle_strip, max_vertices = 6) out;
 
 uniform float brush_size;
 
@@ -22,13 +22,14 @@ void main() {
     // vec2 direction = normalize(vec2(1.0, 1.5));
     vec2 direction = normalize(v_tangent[0].xy);
 
-
+    // clang-format off
     mat4 rot = mat4(
         direction.x, -direction.y, 0.0, 0.0,
         direction.y, direction.x, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
         0.0, 0.0, 0.0, 1.0
     );
+    // clang-format on
 
     // TODO: fix depth
     // if (point_depth - 0.01 <= model_depth) {
@@ -37,37 +38,35 @@ void main() {
 
     g_color = v_color[0];
 
-
     // TL -- TR
     // |  \  |
     // BL -- BR
 
-
     g_uv = vec2(0.0, 0.0);
     vec4 p = rot * vec4(-point_size, -point_size, 0.0, 0.0); // BL
     gl_Position = p + position;
-    EmitVertex(); 
+    EmitVertex();
     g_uv = vec2(1.0, 0.0);
     p = rot * vec4(point_size, -point_size, 0.0, 0.0); // BL
     gl_Position = p + position;
-    EmitVertex(); 
+    EmitVertex();
     g_uv = vec2(0.0, 1.0);
     p = rot * vec4(-point_size, point_size, 0.0, 0.0); // BL
     gl_Position = p + position;
-    EmitVertex(); 
+    EmitVertex();
 
     g_uv = vec2(1.0, 0.0);
     p = rot * vec4(point_size, -point_size, 0.0, 0.0); // BL
     gl_Position = p + position;
-    EmitVertex(); 
+    EmitVertex();
     g_uv = vec2(1.0, 1.0);
     p = rot * vec4(point_size, point_size, 0.0, 0.0); // BL
     gl_Position = p + position;
-    EmitVertex(); 
+    EmitVertex();
     g_uv = vec2(0.0, 1.0);
     p = rot * vec4(-point_size, point_size, 0.0, 0.0); // BL
     gl_Position = p + position;
-    EmitVertex(); 
+    EmitVertex();
     EndPrimitive();
     // }
 }
