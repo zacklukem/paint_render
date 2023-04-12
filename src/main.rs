@@ -657,7 +657,15 @@ fn draw_model(target: &mut impl Surface, state: &State, data: &DrawData, model: 
         }
     };
 
-    target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
+    target.clear_color_and_depth(
+        (
+            data.background[0],
+            data.background[1],
+            data.background[2],
+            1.0,
+        ),
+        1.0,
+    );
 
     for model in &data.models {
         let (vb, ib) = &model.model_buffers;
