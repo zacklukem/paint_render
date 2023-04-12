@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  repository_dispatch:
+    types: [tag-created]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,6 +15,7 @@ jobs:
       matrix:
         include:
           - os: macos-latest
+            asset_name: paint_render
           - os: ubuntu-latest
           - os: windows-latest
     steps:
@@ -27,3 +27,10 @@ jobs:
           override: true
       - name: Build
         run: cargo build --verbose --release
+      - name: Upload binary to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/release/paint_render
+          asset_name: ${{ matrix.asset_name }}
+          tag: ${{ github.event.client_payload.new_version }}
