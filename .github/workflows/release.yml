@@ -15,9 +15,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            asset_name: paint_render
+            asset_name: paint_render-x86_64-macos
           - os: ubuntu-latest
+            asset_name: paint_render-x86_64-linux
           - os: windows-latest
+            asset_name: paint_render-x86_64-windows
     steps:
       - uses: actions/checkout@v2
       - name: Install latest rust
