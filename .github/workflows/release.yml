@@ -16,10 +16,13 @@ jobs:
         include:
           - os: macos-latest
             asset_name: paint_render-x86_64-macos
+            in_name: paint_render
           - os: ubuntu-latest
             asset_name: paint_render-x86_64-linux
+            in_name: paint_render
           - os: windows-latest
-            asset_name: paint_render-x86_64-windows
+            asset_name: paint_render-x86_64-windows.exe
+            in_name: paint_render.exe
     steps:
       - uses: actions/checkout@v2
       - name: Install latest rust
@@ -33,6 +36,6 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/release/paint_render
+          file: target/release/${{ matrix.in_name }}
           asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.event.client_payload.new_version }}
