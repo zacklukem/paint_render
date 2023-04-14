@@ -6,7 +6,6 @@ uniform bool enable_brush_tbn;
 
 in float v_brush_index[];
 in vec4 v_color[];
-in float v_model_depth[];
 in vec3 v_tangent[];
 in vec3 v_bitangent[];
 
@@ -16,9 +15,6 @@ out vec2 g_uv;
 
 void main() {
     vec4 position = gl_in[0].gl_Position;
-    // Equivilant to gl_FragCoord.z
-    float point_depth = ((position.z / position.w) + 1.0) / 2.0;
-    // float model_depth = v_model_depth[0];
 
     // vec2 direction = normalize(vec2(0.0, 1.0));
     vec2 direction = normalize(v_tangent[0].xy);

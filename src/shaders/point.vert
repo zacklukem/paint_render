@@ -16,16 +16,17 @@ in int brush_index;
 
 out float v_brush_index;
 out vec4 v_color;
-out float v_model_depth;
 out vec3 v_tangent;
 out vec3 v_bitangent;
 
+// http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+// http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
 vec3 rgb2hsv(vec3 c) {
     vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
     vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
@@ -45,16 +46,6 @@ void main() {
 
     v_tangent = (view * model * vec4(tangent, 0.0)).xyz;
     v_bitangent = (view * model * vec4(bitangent, 0.0)).xyz;
-
-    // the w was a z...
-    vec3 raw_pos = gl_Position.xyz / gl_Position.w;
-    raw_pos = (raw_pos + 1.0) / PR_NUM_BRUSHES;
-
-    raw_pos.x = clamp(raw_pos.x, 0.0, 1.0);
-    raw_pos.y = clamp(raw_pos.y, 0.0, 1.0);
-
-    vec4 sample = texture(color_texture, raw_pos.xy);
-    v_model_depth = sample.w;
 
     // Shading
 

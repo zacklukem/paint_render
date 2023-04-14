@@ -67,7 +67,7 @@ pub fn gen_point_list(model: &Model, density: f32) -> Vec<Point> {
         total_area += area;
         let num_points_f32 = area * density;
         let mut num_points = num_points_f32.floor() as usize;
-        let num_points_remainder = num_points_f32 - num_points as f32;
+        let num_points_remainder = num_points_f32.fract();
 
         if rand::random::<f32>() < num_points_remainder {
             num_points += 1;
