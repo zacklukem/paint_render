@@ -8,6 +8,8 @@
 
 ### Example Run:
 
+You can also run using pre-compiled binaries at [https://github.com/zacklukem/paint_render/releases](https://github.com/zacklukem/paint_render/releases)
+
 `cargo run -- res/scenes/apple.toml`
 
 To build release target with optimizations (recommended if it runs slow):
