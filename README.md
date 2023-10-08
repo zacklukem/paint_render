@@ -1,9 +1,11 @@
 # Paint Render
 
+ * [Final presentation link](https://github.com/zacklukem/paint_render/blob/ae126e02444ada68a1183f9bdec788653f281e0c/docs/final_presentation.pdf)
  * Project for Purdue CS 334
  * Basic painterly renderer
  * Requirements to Build: Rust, OpenGL
 
+![demo image](https://github.com/zacklukem/paint_render/blob/ae126e02444ada68a1183f9bdec788653f281e0c/docs/demo.png?raw=true)
 ## Usage
 
 ### Example Run:
